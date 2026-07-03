@@ -7,7 +7,7 @@
   <h2 class="fw-display mb-0">
     <i class="bi bi-hourglass-split me-2 text-warning"></i>Pedidos Pendentes
   </h2>
-  <span class="badge bg-warning text-dark fs-6">{{ reservas|length }} pendente{{ reservas|length|pluralize }}</span>
+  <span class="badge bg-warning text-dark fs-6">{{ page_obj.paginator.count }} pendente{{ page_obj.paginator.count|pluralize }}</span>
 </div>
 
 {% if reservas %}
@@ -63,6 +63,8 @@
     </div>
     {% endfor %}
   </div>
+
+  {% include "website/_paginacao.html" %}
 {% else %}
   <div class="alert alert-success">
     <i class="bi bi-check-circle me-2"></i>

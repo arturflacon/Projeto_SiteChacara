@@ -1,5 +1,5 @@
 from django.contrib.auth import views as auth_views
-from django.urls import path
+from django.urls import path, reverse_lazy
 
 from .views import (
     # Públicas
@@ -12,6 +12,7 @@ from .views import (
     SignupView,
     # Cliente autenticado
     ReservaCreate, MinhasReservasListView,
+    MinhaReservaDetailView, MinhaReservaUpdateView, MinhaReservaDeleteView,
     # Admin — reservas
     PedidosPendentesListView, AprovarReservaView, RecusarReservaView,
     ReservaUpdateView, ReservaDeleteView,
@@ -34,10 +35,18 @@ urlpatterns = [
     path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('cadastro/', SignupView.as_view(), name='signup'),
+    path('senha/alterar/', auth_views.PasswordChangeView.as_view(
+        template_name='registration/password_change_form.html',
+        success_url=reverse_lazy('password_change_done')), name='password_change'),
+    path('senha/alterar/concluido/', auth_views.PasswordChangeDoneView.as_view(
+        template_name='registration/password_change_done.html'), name='password_change_done'),
 
     # --- Reservas (cliente) ---
     path('reservas/nova/', ReservaCreate.as_view(), name='reserva_create'),
     path('reservas/minhas/', MinhasReservasListView.as_view(), name='minhas_reservas'),
+    path('reservas/minhas/<int:pk>/', MinhaReservaDetailView.as_view(), name='minha_reserva_detail'),
+    path('reservas/minhas/<int:pk>/editar/', MinhaReservaUpdateView.as_view(), name='minha_reserva_update'),
+    path('reservas/minhas/<int:pk>/cancelar/', MinhaReservaDeleteView.as_view(), name='minha_reserva_delete'),
 
     # --- Reservas (admin) ---
     path('reservas/pendentes/', PedidosPendentesListView.as_view(), name='pedidos_pendentes'),

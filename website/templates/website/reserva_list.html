@@ -21,6 +21,7 @@
           <th>Valor</th>
           <th>Status</th>
           <th>Pedido em</th>
+          <th class="text-end">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -48,11 +49,26 @@
             {% endif %}
           </td>
           <td class="text-secondary small">{{ r.data_pedido|date:"d/m/Y H:i" }}</td>
+          <td class="text-end text-nowrap">
+            <a href="{% url 'minha_reserva_detail' r.pk %}" class="btn btn-sm btn-outline-secondary" title="Detalhes">
+              <i class="bi bi-eye"></i>
+            </a>
+            {% if r.status == 'PENDENTE' %}
+              <a href="{% url 'minha_reserva_update' r.pk %}" class="btn btn-sm btn-outline-primary" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{% url 'minha_reserva_delete' r.pk %}" class="btn btn-sm btn-outline-danger" title="Cancelar">
+                <i class="bi bi-x-circle"></i>
+              </a>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  {% include "website/_paginacao.html" %}
 {% else %}
   <div class="alert alert-info">
     <i class="bi bi-info-circle me-2"></i>

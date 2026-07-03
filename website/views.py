@@ -1,5 +1,7 @@
+from braces.views import GroupRequiredMixin
 from django.contrib.auth import login
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import Group
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -17,12 +19,22 @@ from .models import Administrador, Chacara, Cliente, Reserva
 # Mixins
 # ---------------------------------------------------------------------------
 
-class AdminRequiredMixin(UserPassesTestMixin):
-    """Permite acesso a superusers ou usuários com perfil Administrador."""
+class AdminRequiredMixin(GroupRequiredMixin):
+    """Acesso restrito ao grupo 'Administradores' (django-braces).
 
-    def test_func(self):
+    Além dos membros do grupo, superusers e usuários com perfil
+    ``Administrador`` mantêm acesso — isso preserva o comportamento
+    esperado mesmo para perfis criados fora do fluxo padrão.
+    """
+
+    group_required = 'Administradores'
+    raise_exception = False  # sem permissão -> redireciona ao login
+
+    def check_membership(self, groups):
         u = self.request.user
-        return u.is_authenticated and (u.is_superuser or hasattr(u, 'administrador'))
+        if u.is_superuser or hasattr(u, 'administrador'):
+            return True
+        return super().check_membership(groups)
 
 
 # ---------------------------------------------------------------------------
@@ -51,9 +63,15 @@ class CalendarioReservasView(ListView):
     model = Reserva
     template_name = 'website/calendario_reservas.html'
     context_object_name = 'reservas'
+    paginate_by = 10
 
     def get_queryset(self):
-        return Reserva.objects.filter(status=Reserva.STATUS_CONFIRMADA).order_by('data_inicio')
+        return (
+            Reserva.objects
+            .filter(status=Reserva.STATUS_CONFIRMADA)
+            .select_related('cliente')
+            .order_by('data_inicio')
+        )
 
 
 class ChacaraUnicaView(DetailView):
@@ -110,14 +128,16 @@ class MinhasReservasListView(LoginRequiredMixin, ListView):
     model = Reserva
     template_name = 'website/reserva_list.html'
     context_object_name = 'reservas'
+    paginate_by = 10
 
     def get_queryset(self):
         try:
             cliente = self.request.user.cliente
         except Cliente.DoesNotExist:
             return Reserva.objects.none()
-        return Reserva.objects.filter(cliente=cliente)
-    
+        return Reserva.objects.filter(cliente=cliente).select_related('chacara')
+
+
 class ReservaDetailView(LoginRequiredMixin, DetailView):
     model = Reserva
     template_name = 'website/reserva_detail.html'
@@ -137,6 +157,42 @@ class ReservaDetailView(LoginRequiredMixin, DetailView):
         return qs.none()
 
 
+class MinhaReservaDetailView(LoginRequiredMixin, DetailView):
+    """Detalhe de uma reserva restrito ao próprio cliente dono."""
+    model = Reserva
+    template_name = 'website/reserva_detail.html'
+    context_object_name = 'reserva'
+
+    def get_queryset(self):
+        return Reserva.objects.select_related('cliente', 'chacara').filter(
+            cliente__usuario=self.request.user)
+
+
+class MinhaReservaUpdateView(LoginRequiredMixin, UpdateView):
+    """Cliente edita o próprio pedido enquanto está PENDENTE."""
+    model = Reserva
+    form_class = ReservaClienteForm
+    template_name = 'website/reserva_form.html'
+    success_url = reverse_lazy('minhas_reservas')
+    extra_context = {'titulo': 'Editar Meu Pedido', 'botao': 'Salvar Alterações'}
+
+    def get_queryset(self):
+        return Reserva.objects.filter(
+            cliente__usuario=self.request.user, status=Reserva.STATUS_PENDENTE)
+
+
+class MinhaReservaDeleteView(LoginRequiredMixin, DeleteView):
+    """Cliente cancela (exclui) o próprio pedido enquanto está PENDENTE."""
+    model = Reserva
+    template_name = 'website/reserva_confirm_cancel.html'
+    success_url = reverse_lazy('minhas_reservas')
+    extra_context = {'titulo': 'Cancelar Meu Pedido'}
+
+    def get_queryset(self):
+        return Reserva.objects.filter(
+            cliente__usuario=self.request.user, status=Reserva.STATUS_PENDENTE)
+
+
 # ---------------------------------------------------------------------------
 # Área administrativa (Administrador)
 # ---------------------------------------------------------------------------
@@ -145,9 +201,15 @@ class PedidosPendentesListView(AdminRequiredMixin, ListView):
     model = Reserva
     template_name = 'website/pedidos_pendentes.html'
     context_object_name = 'reservas'
+    paginate_by = 10
 
     def get_queryset(self):
-        return Reserva.objects.filter(status=Reserva.STATUS_PENDENTE).order_by('data_pedido')
+        return (
+            Reserva.objects
+            .filter(status=Reserva.STATUS_PENDENTE)
+            .select_related('cliente', 'chacara')
+            .order_by('data_pedido')
+        )
 
 
 class AprovarReservaView(AdminRequiredMixin, View):
@@ -210,6 +272,10 @@ class ClienteUpdate(LoginRequiredMixin, UpdateView):
     success_url = reverse_lazy('index')
     extra_context = {'titulo': 'Editar Cliente', 'botao': 'Salvar Alterações'}
 
+    def get_queryset(self):
+        # Cada usuário só pode editar o próprio cadastro de cliente.
+        return Cliente.objects.filter(usuario=self.request.user)
+
 
 class AdministradorCreate(AdminRequiredMixin, CreateView):
     model = Administrador
@@ -217,3 +283,9 @@ class AdministradorCreate(AdminRequiredMixin, CreateView):
     template_name = 'website/administrador_form.html'
     success_url = reverse_lazy('index')
     extra_context = {'titulo': 'Cadastro de Administrador', 'botao': 'Cadastrar Administrador'}
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        grupo, _ = Group.objects.get_or_create(name='Administradores')
+        self.object.usuario.groups.add(grupo)
+        return response
