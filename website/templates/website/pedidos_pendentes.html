@@ -10,61 +10,72 @@
   <span class="badge bg-warning text-dark fs-6">{{ page_obj.paginator.count }} pendente{{ page_obj.paginator.count|pluralize }}</span>
 </div>
 
+{% include 'website/form-filter.html' %}
+
 {% if reservas %}
-  <div class="row g-4">
-    {% for r in reservas %}
-    <div class="col-12">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body">
-          <div class="row align-items-center">
-            <div class="col-md-6">
-              <h5 class="fw-display mb-1">{{ r.cliente.nome }}</h5>
-              <p class="text-secondary small mb-1">
-                <i class="bi bi-telephone me-1"></i>{{ r.cliente.telefone }}
-              </p>
-              <p class="mb-1"><strong>Chácara:</strong> {{ r.chacara.nome }}</p>
-              <p class="mb-1">
-                <strong>Período:</strong>
-                {{ r.data_inicio|date:"d/m/Y" }} até {{ r.data_fim|date:"d/m/Y" }}
-              </p>
-              {% if r.observacoes %}
-              <p class="mb-0 text-secondary small">
-                <strong>Obs:</strong> {{ r.observacoes }}
-              </p>
-              {% endif %}
-            </div>
-            <div class="col-md-3 text-md-center">
-              <p class="mb-1 text-secondary small">Pedido em</p>
-              <p class="mb-0 fw-semibold">{{ r.data_pedido|date:"d/m/Y H:i" }}</p>
-              {% if r.valor_total %}
-              <p class="mt-1 mb-0 text-success fw-bold">R$ {{ r.valor_total|floatformat:2 }}</p>
-              {% endif %}
-            </div>
-            <div class="col-md-3 d-flex flex-column gap-2 mt-3 mt-md-0">
-              <form method="post" action="{% url 'reserva_aprovar' r.pk %}">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-success w-100">
-                  <i class="bi bi-check-lg me-1"></i>Aprovar
-                </button>
-              </form>
-              <form method="post" action="{% url 'reserva_recusar' r.pk %}">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-danger w-100">
-                  <i class="bi bi-x-lg me-1"></i>Recusar
-                </button>
-              </form>
-              <a href="{% url 'reserva_update' r.pk %}" class="btn btn-outline-secondary btn-sm">
-                <i class="bi bi-pencil me-1"></i>Editar
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle table-datatable">
+      <thead class="table-light">
+        <tr>
+          <th>Cliente</th>
+          <th>Telefone</th>
+          <th>Entrada</th>
+          <th>Saída</th>
+          <th>Valor</th>
+          <th>Pedido em</th>
+          <th>Observações</th>
+          <th class="text-end" data-orderable="false" data-searchable="false">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reservas %}
+        <tr>
+          <td><strong>{{ r.cliente.nome }}</strong></td>
+          <td class="text-nowrap">
+            <a href="tel:{{ r.cliente.telefone }}" class="text-decoration-none">
+              <i class="bi bi-telephone me-1 text-primary"></i>{{ r.cliente.telefone }}
+            </a>
+          </td>
+          <td data-sort="{{ r.data_inicio|date:'Y-m-d' }}">{{ r.data_inicio|date:"d/m/Y" }}</td>
+          <td data-sort="{{ r.data_fim|date:'Y-m-d' }}">{{ r.data_fim|date:"d/m/Y" }}</td>
+          <td class="text-nowrap" data-sort="{{ r.valor_total|stringformat:'.2f' }}">
+            {% if r.valor_total %}
+              R$ {{ r.valor_total|floatformat:"2g" }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="text-secondary small text-nowrap" data-sort="{{ r.data_pedido|date:'Y-m-d H:i' }}">{{ r.data_pedido|date:"d/m/Y H:i" }}</td>
+          <td class="text-secondary small" title="{{ r.observacoes }}">{{ r.observacoes|truncatechars:60 }}</td>
+          <td class="text-end text-nowrap">
+            <form method="post" action="{% url 'reserva_aprovar' r.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-success" title="Aprovar">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </form>
+            <form method="post" action="{% url 'reserva_recusar' r.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger" title="Recusar">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </form>
+            <a href="{% url 'reserva_update' r.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+              <i class="bi bi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
-  {% include "website/_paginacao.html" %}
+  {% include 'website/paginacao.html' %}
+{% elif filter.is_bound %}
+  <div class="alert alert-warning">
+    <i class="bi bi-search me-2"></i>
+    Nenhum pedido pendente encontrado com esses filtros.
+  </div>
 {% else %}
   <div class="alert alert-success">
     <i class="bi bi-check-circle me-2"></i>

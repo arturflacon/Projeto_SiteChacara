@@ -10,9 +10,11 @@
   </a>
 </div>
 
+{% include 'website/form-filter.html' %}
+
 {% if reservas %}
   <div class="table-responsive">
-    <table class="table table-hover align-middle">
+    <table class="table table-striped table-hover align-middle table-datatable">
       <thead class="table-light">
         <tr>
           <th>Chácara</th>
@@ -21,18 +23,18 @@
           <th>Valor</th>
           <th>Status</th>
           <th>Pedido em</th>
-          <th class="text-end">Ações</th>
+          <th class="text-end" data-orderable="false" data-searchable="false">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for r in reservas %}
         <tr>
           <td><strong>{{ r.chacara.nome }}</strong></td>
-          <td>{{ r.data_inicio|date:"d/m/Y" }}</td>
-          <td>{{ r.data_fim|date:"d/m/Y" }}</td>
-          <td>
+          <td data-sort="{{ r.data_inicio|date:'Y-m-d' }}">{{ r.data_inicio|date:"d/m/Y" }}</td>
+          <td data-sort="{{ r.data_fim|date:'Y-m-d' }}">{{ r.data_fim|date:"d/m/Y" }}</td>
+          <td class="text-nowrap" data-sort="{{ r.valor_total|stringformat:'.2f' }}">
             {% if r.valor_total %}
-              R$ {{ r.valor_total|floatformat:2 }}
+              R$ {{ r.valor_total|floatformat:"2g" }}
             {% else %}
               —
             {% endif %}
@@ -48,7 +50,7 @@
               <span class="badge bg-secondary">Cancelada</span>
             {% endif %}
           </td>
-          <td class="text-secondary small">{{ r.data_pedido|date:"d/m/Y H:i" }}</td>
+          <td class="text-secondary small text-nowrap" data-sort="{{ r.data_pedido|date:'Y-m-d H:i' }}">{{ r.data_pedido|date:"d/m/Y H:i" }}</td>
           <td class="text-end text-nowrap">
             <a href="{% url 'minha_reserva_detail' r.pk %}" class="btn btn-sm btn-outline-secondary" title="Detalhes">
               <i class="bi bi-eye"></i>
@@ -68,7 +70,12 @@
     </table>
   </div>
 
-  {% include "website/_paginacao.html" %}
+  {% include 'website/paginacao.html' %}
+{% elif filter.is_bound %}
+  <div class="alert alert-warning">
+    <i class="bi bi-search me-2"></i>
+    Nenhuma reserva encontrada com esses filtros.
+  </div>
 {% else %}
   <div class="alert alert-info">
     <i class="bi bi-info-circle me-2"></i>

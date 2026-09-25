@@ -8,9 +8,11 @@ from django.utils import timezone
 from django.views import View
 from django.views.generic import (
     CreateView, DeleteView, DetailView, FormView,
-    ListView, TemplateView, UpdateView,
+    TemplateView, UpdateView,
 )
+from django_filters.views import FilterView
 
+from .filters import ReservaConfirmadaFilter, ReservaFilter, ReservaPendenteFilter
 from .forms import ReservaClienteForm, SignupForm
 from .models import Administrador, Chacara, Cliente, Reserva
 
@@ -59,18 +61,19 @@ class SobreView(TemplateView):
         return ctx
 
 
-class CalendarioReservasView(ListView):
+class CalendarioReservasView(FilterView):
     model = Reserva
     template_name = 'website/calendario_reservas.html'
     context_object_name = 'reservas'
+    filterset_class = ReservaConfirmadaFilter
     paginate_by = 10
+    ordering = ['data_inicio']
 
     def get_queryset(self):
         return (
-            Reserva.objects
+            super().get_queryset()
             .filter(status=Reserva.STATUS_CONFIRMADA)
             .select_related('cliente')
-            .order_by('data_inicio')
         )
 
 
@@ -124,18 +127,21 @@ class ReservaCreate(LoginRequiredMixin, CreateView):
         return redirect(self.success_url)
 
 
-class MinhasReservasListView(LoginRequiredMixin, ListView):
+class MinhasReservasListView(LoginRequiredMixin, FilterView):
     model = Reserva
     template_name = 'website/reserva_list.html'
     context_object_name = 'reservas'
+    filterset_class = ReservaFilter
     paginate_by = 10
+    ordering = ['-data_pedido']
 
     def get_queryset(self):
-        try:
-            cliente = self.request.user.cliente
-        except Cliente.DoesNotExist:
-            return Reserva.objects.none()
-        return Reserva.objects.filter(cliente=cliente).select_related('chacara')
+        # Usuário sem perfil de cliente cai numa lista vazia.
+        return (
+            super().get_queryset()
+            .filter(cliente__usuario=self.request.user)
+            .select_related('chacara')
+        )
 
 
 class ReservaDetailView(LoginRequiredMixin, DetailView):
@@ -197,18 +203,19 @@ class MinhaReservaDeleteView(LoginRequiredMixin, DeleteView):
 # Área administrativa (Administrador)
 # ---------------------------------------------------------------------------
 
-class PedidosPendentesListView(AdminRequiredMixin, ListView):
+class PedidosPendentesListView(AdminRequiredMixin, FilterView):
     model = Reserva
     template_name = 'website/pedidos_pendentes.html'
     context_object_name = 'reservas'
+    filterset_class = ReservaPendenteFilter
     paginate_by = 10
+    ordering = ['data_pedido']
 
     def get_queryset(self):
         return (
-            Reserva.objects
+            super().get_queryset()
             .filter(status=Reserva.STATUS_PENDENTE)
             .select_related('cliente', 'chacara')
-            .order_by('data_pedido')
         )
 
 

@@ -306,3 +306,12 @@
     .bg-petrol { background-color: var(--petrol) !important; }
     .bg-petrol-darker { background-color: var(--petrol-darker) !important; }
     .bg-petrol-subtle { background-color: var(--petrol-subtle) !important; }
+
+    /* DataTables dentro de .table-responsive: as .row que ele cria têm margens
+       negativas e, sem isto, geram uma barra de rolagem horizontal à toa. */
+    .table-responsive > .dt-container > .row { --bs-gutter-x: 0; }
+
+    /* O DataTables alinha à direita as colunas que reconhece como data; aqui
+       elas voltam para a esquerda, como no resto do site. Moeda segue à direita. */
+    table.dataTable th.dt-type-date,
+    table.dataTable td.dt-type-date { text-align: left; }

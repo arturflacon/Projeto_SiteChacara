@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import Administrador, Chacara, Cliente, Reserva
 
@@ -199,3 +200,127 @@ class AcessoPorDonoTest(TestCase):
         response = c.get(reverse('pedidos_pendentes'))
         # GroupRequiredMixin com raise_exception=False redireciona ao login.
         self.assertEqual(response.status_code, 302)
+
+
+class FiltroListagensTest(TestCase):
+    """Conferência da skill django-filter-listagens nas listas de reserva."""
+
+    def setUp(self):
+        self.chacara = make_chacara()
+        self.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=make_user())
+        self.outro_cliente = Cliente.objects.create(
+            nome='Maria Souza', telefone='11888887777', usuario=make_user(username='maria'))
+        make_admin_user()
+        self.hoje = date.today()
+
+    def _reserva(self, cliente=None, dias=10, status=Reserva.STATUS_PENDENTE):
+        inicio = self.hoje + timedelta(days=dias)
+        return Reserva.objects.create(
+            cliente=cliente or self.cliente,
+            chacara=self.chacara,
+            data_inicio=inicio,
+            data_fim=inicio + timedelta(days=2),
+            status=status,
+        )
+
+    def _navegador(self, username):
+        c = Client()
+        c.login(username=username, password='testpass123')
+        return c
+
+    def test_lista_sem_parametros_mostra_so_as_reservas_do_cliente(self):
+        minha = self._reserva()
+        alheia = self._reserva(cliente=self.outro_cliente)
+        response = self._navegador('clienteuser').get(reverse('minhas_reservas'))
+        self.assertIn(minha, response.context['reservas'])
+        self.assertNotIn(alheia, response.context['reservas'])
+
+    def test_filtro_nao_mostra_reservas_de_outro_cliente(self):
+        self._reserva(cliente=self.outro_cliente, status=Reserva.STATUS_CONFIRMADA)
+        confirmada = self._reserva(dias=20, status=Reserva.STATUS_CONFIRMADA)
+        self._reserva()
+        response = self._navegador('clienteuser').get(
+            reverse('minhas_reservas'), {'status': Reserva.STATUS_CONFIRMADA})
+        self.assertEqual(list(response.context['reservas']), [confirmada])
+
+    def test_busca_por_parte_do_nome_do_cliente(self):
+        joao = self._reserva()
+        self._reserva(cliente=self.outro_cliente)
+        response = self._navegador('adminuser').get(reverse('pedidos_pendentes'), {'cliente': 'SILV'})
+        self.assertEqual(list(response.context['reservas']), [joao])
+
+    def test_faixa_de_datas_inclui_o_ultimo_dia(self):
+        reserva = self._reserva()
+        hoje = timezone.localdate()  # data_pedido é DateTimeField
+        response = self._navegador('adminuser').get(reverse('pedidos_pendentes'), {
+            'data_inicio_max': reserva.data_inicio.isoformat(),
+            'data_pedido_min': hoje.isoformat(),
+            'data_pedido_max': hoje.isoformat(),
+        })
+        self.assertEqual(list(response.context['reservas']), [reserva])
+
+    def test_paginacao_mantem_a_busca(self):
+        for dias in range(11):
+            self._reserva(dias=dias)
+        self._reserva(cliente=self.outro_cliente)
+        c = self._navegador('adminuser')
+        url = reverse('pedidos_pendentes')
+
+        response = c.get(url, {'cliente': 'silva'})
+        self.assertContains(response, 'href="?cliente=silva&amp;page=2"')
+
+        response = c.get(url, {'cliente': 'silva', 'page': 2})
+        self.assertEqual([r.cliente for r in response.context['reservas']], [self.cliente])
+
+    def test_limpar_volta_para_a_lista_sem_parametros(self):
+        url = reverse('minhas_reservas')
+        response = self._navegador('clienteuser').get(url, {'status': Reserva.STATUS_PENDENTE})
+        self.assertContains(response, f'<a href="{url}" class="btn btn-outline-secondary">')
+
+    def test_disponibilidade_publica_nao_filtra_por_cliente(self):
+        response = Client().get(reverse('calendario_reservas'))
+        self.assertIn('data_inicio', response.context['filter'].form.fields)
+        self.assertNotIn('cliente', response.context['filter'].form.fields)
+
+
+class DataTablesListagensTest(TestCase):
+    """As tabelas de listagem seguem a skill datatables-listagens."""
+
+    TABELA = 'class="table table-striped table-hover align-middle table-datatable"'
+
+    def setUp(self):
+        self.chacara = make_chacara()
+        self.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=make_user())
+        make_admin_user()
+
+    def _reserva(self, status=Reserva.STATUS_PENDENTE):
+        # 3 diárias × R$ 500,00 = R$ 1.500,00
+        return Reserva.objects.create(
+            cliente=self.cliente,
+            chacara=self.chacara,
+            data_inicio=date(2026, 12, 3),
+            data_fim=date(2026, 12, 6),
+            status=status,
+        )
+
+    def test_moeda_e_data_ordenam_pelo_data_sort(self):
+        self._reserva()
+        for username, url_name in [('clienteuser', 'minhas_reservas'), ('adminuser', 'pedidos_pendentes')]:
+            with self.subTest(url_name):
+                c = Client()
+                c.login(username=username, password='testpass123')
+                response = c.get(reverse(url_name))
+                self.assertContains(response, self.TABELA)
+                self.assertContains(response, '<td data-sort="2026-12-03">03/12/2026</td>')
+                self.assertContains(response, 'data-sort="1500.00"')
+                self.assertContains(response, 'R$ 1.500,00')
+                self.assertContains(
+                    response,
+                    '<th class="text-end" data-orderable="false" data-searchable="false">Ações</th>',
+                )
+
+    def test_disponibilidade_ordena_datas_pelo_data_sort(self):
+        self._reserva(status=Reserva.STATUS_CONFIRMADA)
+        response = Client().get(reverse('calendario_reservas'))
+        self.assertContains(response, self.TABELA)
+        self.assertContains(response, '<td data-sort="2026-12-06">06/12/2026</td>')

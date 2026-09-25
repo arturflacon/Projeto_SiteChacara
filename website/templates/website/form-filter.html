@@ -1,0 +1,20 @@
+{% load crispy_forms_tags %}
+<style>
+/* Deixa os campos do filtro lado a lado, em vez de um embaixo do outro */
+form.row div[id*="div_id"] {
+    flex: 0 0 auto;
+    width: auto;
+}
+</style>
+<h5>Filtros</h5>
+<form class="row gy-2 gx-3 align-items-end pb-3" action="" method="get">
+    {{ filter.form|crispy }}
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-primary">
+            <i class="bi bi-search"></i> Filtrar
+        </button>
+        <a href="{{ request.path }}" class="btn btn-outline-secondary">
+            <i class="bi bi-x-lg"></i> Limpar
+        </a>
+    </div>
+</form>

@@ -10,6 +10,8 @@
   </a>
 </div>
 
+{% include 'website/form-filter.html' %}
+
 <p class="text-secondary mb-4">
   As datas abaixo estão <strong>confirmadas</strong> e indisponíveis para novos pedidos.
   Datas fora desta lista estão livres.
@@ -17,8 +19,8 @@
 
 {% if reservas %}
   <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead class="table-primary">
+    <table class="table table-striped table-hover align-middle table-datatable">
+      <thead class="table-light">
         <tr>
           <th>Entrada</th>
           <th>Saída</th>
@@ -31,11 +33,11 @@
       <tbody>
         {% for r in reservas %}
         <tr>
-          <td>{{ r.data_inicio|date:"d/m/Y" }}</td>
-          <td>{{ r.data_fim|date:"d/m/Y" }}</td>
+          <td data-sort="{{ r.data_inicio|date:'Y-m-d' }}">{{ r.data_inicio|date:"d/m/Y" }}</td>
+          <td data-sort="{{ r.data_fim|date:'Y-m-d' }}">{{ r.data_fim|date:"d/m/Y" }}</td>
           {% if user.is_superuser or user.administrador %}
           <td><strong>{{ r.cliente.nome }}</strong></td>
-          <td>
+          <td class="text-nowrap">
             <a href="tel:{{ r.cliente.telefone }}" class="text-decoration-none">
               <i class="bi bi-telephone me-1 text-primary"></i>{{ r.cliente.telefone }}
             </a>
@@ -47,7 +49,12 @@
     </table>
   </div>
 
-  {% include "website/_paginacao.html" %}
+  {% include 'website/paginacao.html' %}
+{% elif filter.is_bound %}
+  <div class="alert alert-success">
+    <i class="bi bi-check-circle me-2"></i>
+    Nenhuma data reservada no período filtrado.
+  </div>
 {% else %}
   <div class="alert alert-success">
     <i class="bi bi-check-circle me-2"></i>
