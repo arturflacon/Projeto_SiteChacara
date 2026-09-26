@@ -267,9 +267,13 @@ class FiltroListagensTest(TestCase):
         url = reverse('pedidos_pendentes')
 
         response = c.get(url, {'cliente': 'silva'})
-        self.assertContains(response, 'href="?cliente=silva&amp;page=2"')
+        self.assertContains(response, 'Página 1 de 2')
+        self.assertContains(response, 'href="?cliente=silva&page=2">Próxima</a>')
+        self.assertNotContains(response, '>Anterior</a>')
 
         response = c.get(url, {'cliente': 'silva', 'page': 2})
+        self.assertContains(response, 'href="?cliente=silva&page=1">Anterior</a>')
+        self.assertNotContains(response, '>Próxima</a>')
         self.assertEqual([r.cliente for r in response.context['reservas']], [self.cliente])
 
     def test_limpar_volta_para_a_lista_sem_parametros(self):
