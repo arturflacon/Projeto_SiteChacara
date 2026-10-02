@@ -1,0 +1,41 @@
+{% extends "website/modelo.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ titulo }} — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header {% if aprovar %}bg-success{% else %}bg-danger{% endif %} text-white py-3">
+        <h4 class="mb-0 fw-display">
+          <i class="bi {% if aprovar %}bi-check-circle{% else %}bi-x-circle{% endif %} me-2"></i>{{ titulo }}
+        </h4>
+      </div>
+      <div class="card-body p-4">
+        <p class="mb-1">Pedido #{{ reserva.pk }} de <strong>{{ reserva.cliente.nome }}</strong></p>
+        <p class="text-secondary small mb-3">
+          {{ reserva.chacara.nome }} — {{ reserva.data_inicio|date:"d/m/Y" }} a {{ reserva.data_fim|date:"d/m/Y" }}
+          {% if reserva.valor_total %}· R$ {{ reserva.valor_total|floatformat:"2g" }}{% endif %}
+        </p>
+        {% if aprovar %}
+          <div class="alert alert-info small">
+            <i class="bi bi-info-circle me-1"></i>
+            Outros pedidos pendentes no mesmo período serão recusados automaticamente.
+          </div>
+        {% endif %}
+        <form method="post">
+          {% csrf_token %}
+          {{ form|crispy }}
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn {% if aprovar %}btn-success{% else %}btn-danger{% endif %} px-4">
+              {{ botao }}
+            </button>
+            <a href="{% url 'pedidos_pendentes' %}" class="btn btn-outline-secondary px-4">Voltar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

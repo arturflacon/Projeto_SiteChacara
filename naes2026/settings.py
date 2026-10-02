@@ -1,5 +1,7 @@
 from pathlib import Path
 import os
+import sys
+from django.contrib.messages import constants as messages
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -94,9 +96,14 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'index'
 LOGOUT_REDIRECT_URL = 'index'
 
+# O Bootstrap usa "danger" (e não "error") para a cor vermelha dos toasts.
+MESSAGE_TAGS = {messages.ERROR: 'danger'}
+
 # Django Debug Toolbar — apenas em desenvolvimento (DEBUG=True).
 # Em produção (App Engine, DEBUG=False) nada disto é importado/instalado.
-if DEBUG:
+# Também fica de fora em "manage.py test", para não interferir nos testes.
+TESTANDO = 'test' in sys.argv
+if DEBUG and not TESTANDO:
     INSTALLED_APPS.append('debug_toolbar')
     MIDDLEWARE.insert(1, 'debug_toolbar.middleware.DebugToolbarMiddleware')
     INTERNAL_IPS = ['127.0.0.1']

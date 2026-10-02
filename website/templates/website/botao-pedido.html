@@ -1,0 +1,14 @@
+{% load sitio_tags %}
+{# Botão "Fazer pedido": só clientes (ou visitantes) fazem pedidos; admin vê o atalho para os pendentes. #}
+{# Uso: {% include 'website/botao-pedido.html' with classe="btn btn-primary" icone="bi-calendar-plus" texto="Fazer Pedido" %} #}
+{% if user.is_authenticated and not user.cliente %}
+  {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+    <a href="{% url 'pedidos_pendentes' %}" class="{{ classe }}">
+      <i class="bi bi-hourglass-split me-1"></i>Ver pedidos pendentes
+    </a>
+  {% endif %}
+{% else %}
+  <a href="{% url 'reserva_create' %}" class="{{ classe }}">
+    <i class="bi {{ icone|default:'bi-calendar-check' }} me-1"></i>{{ texto }}
+  </a>
+{% endif %}
