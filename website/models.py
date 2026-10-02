@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -95,6 +98,15 @@ class Reserva(models.Model):
         blank=True,
         verbose_name='Observações', help_text='Descrição do evento ou informações adicionais para a administradora.'
     )
+    analise_ia = models.JSONField(
+        null=True, blank=True,
+        verbose_name='Análise da IA',
+        help_text='Resumo do pedido gerado automaticamente pelo Gemini (apoio à administradora).'
+    )
+    analise_ia_em = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Análise da IA em', help_text='Data e hora em que a análise da IA foi gerada.'
+    )
 
     class Meta:
         verbose_name = 'Reserva'
@@ -174,3 +186,68 @@ class HistoricoReserva(models.Model):
 
     def __str__(self):
         return f"Reserva #{self.reserva_id}: {self.status_anterior or '—'} → {self.status_novo}"
+
+
+class UsoIA(models.Model):
+    """Métricas de cada chamada ao Gemini (tokens e custo).
+
+    Por minimização de dados, o texto das mensagens NÃO é guardado.
+    """
+
+    CHAT = 'CHAT'
+    ANALISE = 'ANALISE'
+    TIPO_CHOICES = [
+        (CHAT, 'Chat (assistente)'),
+        (ANALISE, 'Análise de pedido'),
+    ]
+
+    tipo = models.CharField(
+        max_length=10, choices=TIPO_CHOICES,
+        verbose_name='Tipo', help_text='Chat com o assistente ou análise automática de pedido.'
+    )
+    tokens_entrada = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Tokens de Entrada', help_text='prompt_token_count: instrução + histórico + mensagem.'
+    )
+    tokens_saida = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Tokens de Saída', help_text='Tokens gerados pelo modelo (resposta + raciocínio).'
+    )
+    custo_usd = models.DecimalField(
+        max_digits=12, decimal_places=8, default=0,
+        verbose_name='Custo (US$)', help_text='Calculado automaticamente com os preços do settings.'
+    )
+    usuario = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name='Usuário', help_text='Quem fez a chamada (vazio para visitante).'
+    )
+    reserva = models.ForeignKey(
+        Reserva, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name='Reserva', help_text='Reserva analisada (só nas análises de pedido).'
+    )
+    data = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Data', help_text='Data e hora da chamada.'
+    )
+
+    class Meta:
+        verbose_name = 'Uso da IA'
+        verbose_name_plural = 'Usos da IA'
+        ordering = ['-data']
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} — {self.tokens_entrada}+{self.tokens_saida} tokens"
+
+    def calcular_custo(self):
+        entrada = Decimal(str(settings.GEMINI_PRECO_ENTRADA_USD))
+        saida = Decimal(str(settings.GEMINI_PRECO_SAIDA_USD))
+        custo = self.tokens_entrada * entrada + self.tokens_saida * saida
+        return custo.quantize(Decimal('0.00000001'))
+
+    def save(self, *args, **kwargs):
+        self.custo_usd = self.calcular_custo()
+        super().save(*args, **kwargs)
+
+    @property
+    def custo_brl(self):
+        return Decimal(self.custo_usd) * Decimal(str(settings.GEMINI_COTACAO_BRL))

@@ -1,7 +1,7 @@
 import django_filters
 from django import forms
 
-from .models import Reserva
+from .models import Reserva, UsoIA
 
 
 def _campo_data(lookup_expr, label):
@@ -83,3 +83,25 @@ class ReservaConfirmadaFilter(django_filters.FilterSet):
     class Meta:
         model = Reserva
         fields = {}
+
+
+class UsoIAFilter(django_filters.FilterSet):
+    """Filtros da página de métricas da IA (admin)."""
+
+    tipo = django_filters.ChoiceFilter(
+        choices=UsoIA.TIPO_CHOICES, lookup_expr='exact', label='Tipo', empty_label='Todos',
+    )
+    # "data" é DateTimeField: date__gte/date__lte comparam só o dia, assim
+    # o filtro "até" inclui as chamadas feitas ao longo do último dia.
+    data__gte = django_filters.DateFilter(
+        field_name='data', lookup_expr='date__gte', label='A partir de',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    data__lte = django_filters.DateFilter(
+        field_name='data', lookup_expr='date__lte', label='Até',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+
+    class Meta:
+        model = UsoIA
+        fields = []

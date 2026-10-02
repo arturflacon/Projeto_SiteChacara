@@ -27,6 +27,7 @@
           <th>Valor</th>
           <th>Pedido em</th>
           <th>Observações</th>
+          <th>Análise IA</th>
           <th class="text-end" data-orderable="false" data-searchable="false">Ações</th>
         </tr>
       </thead>
@@ -50,6 +51,17 @@
           </td>
           <td class="text-secondary small text-nowrap" data-sort="{{ r.data_pedido|date:'Y-m-d H:i' }}">{{ r.data_pedido|date:"d/m/Y H:i" }}</td>
           <td class="text-secondary small" title="{{ r.observacoes }}">{{ r.observacoes|truncatechars:60 }}</td>
+          <td class="small" data-sort="{% if r.analise_ia.nivel_atencao == 'alto' %}3{% elif r.analise_ia.nivel_atencao == 'médio' %}2{% elif r.analise_ia.nivel_atencao == 'baixo' %}1{% else %}0{% endif %}" style="min-width: 14rem;">
+            {% if r.analise_ia %}
+              {% include 'website/badge-nivel-ia.html' with nivel=r.analise_ia.nivel_atencao %}
+              <span class="text-secondary">
+                {{ r.analise_ia.tipo_evento|capfirst }}{% if r.analise_ia.convidados_estimados %} · ~{{ r.analise_ia.convidados_estimados }} pessoas{% endif %}
+              </span>
+              <div>{{ r.analise_ia.resumo }}</div>
+            {% else %}
+              <span class="text-secondary">—</span>
+            {% endif %}
+          </td>
           <td class="text-end text-nowrap">
             <form method="post" action="{% url 'reserva_aprovar' r.pk %}" class="d-inline">
               {% csrf_token %}
