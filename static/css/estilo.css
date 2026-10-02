@@ -322,3 +322,56 @@
        elas voltam para a esquerda, como no resto do site. Moeda segue à direita. */
     table.dataTable th.dt-type-date,
     table.dataTable td.dt-type-date { text-align: left; }
+
+    /* ─── ASSISTENTE VIRTUAL (Gemini) ─── */
+    .chatbot-botao {
+      position: fixed;
+      right: 1.25rem;
+      bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+      width: 3.5rem;
+      height: 3.5rem;
+      z-index: 1040;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* Os toasts sobem para não ficarem atrás do botão do chat */
+    .toast-acima-do-chat { margin-bottom: 4.5rem; }
+
+    .chatbot { --bs-offcanvas-width: 400px; }
+    .chatbot-mensagens {
+      overflow-y: auto;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-balao {
+      max-width: 85%;
+      padding: .55rem .85rem;
+      margin-bottom: .6rem;
+      border-radius: 1rem;
+      white-space: pre-wrap;        /* quebras de linha sem precisar de HTML */
+      overflow-wrap: anywhere;
+      line-height: 1.45;
+      font-size: .925rem;
+    }
+    .chat-user {
+      align-self: flex-end;
+      background: var(--petrol);
+      color: #fff;
+      border-bottom-right-radius: .25rem;
+    }
+    .chat-model {
+      align-self: flex-start;
+      background: #fff;
+      color: var(--text-body);
+      border: 1px solid var(--border-color);
+      border-bottom-left-radius: .25rem;
+    }
+    .chat-erro {
+      align-self: flex-start;
+      background: rgba(var(--cp-danger-rgb), .08);
+      color: var(--cp-danger);
+      border: 1px solid rgba(var(--cp-danger-rgb), .25);
+    }
+    .chatbot-aviso { font-size: .75rem; line-height: 1.35; }

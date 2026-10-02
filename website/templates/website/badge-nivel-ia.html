@@ -1,0 +1,8 @@
+{# Badge do nível de atenção da análise da IA. Uso: {% include 'website/badge-nivel-ia.html' with nivel=r.analise_ia.nivel_atencao %} #}
+{% if nivel == 'alto' %}
+  <span class="badge bg-danger">Atenção alta</span>
+{% elif nivel == 'médio' %}
+  <span class="badge bg-warning text-dark">Atenção média</span>
+{% elif nivel == 'baixo' %}
+  <span class="badge bg-success">Atenção baixa</span>
+{% endif %}

@@ -141,6 +141,50 @@
       </div>
     </div>
 
+    {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+    <!-- ANÁLISE DA IA (só para a administração) -->
+    <div class="card border-0 shadow-sm mt-4">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <h5 class="fw-display text-primary mb-0">
+            <i class="bi bi-stars me-1"></i>Análise da IA
+          </h5>
+          <form method="post" action="{% url 'reserva_reanalisar' reserva.pk %}" class="m-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-primary" {% if not ia_habilitada %}disabled title="IA desativada"{% endif %}>
+              <i class="bi bi-arrow-repeat me-1"></i>Reanalisar com IA
+            </button>
+          </form>
+        </div>
+        {% with analise=reserva.analise_ia %}
+        {% if analise %}
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            {% include 'website/badge-nivel-ia.html' with nivel=analise.nivel_atencao %}
+            <span class="badge bg-light text-dark border">{{ analise.tipo_evento|capfirst }}</span>
+            <span class="badge bg-light text-dark border">
+              <i class="bi bi-people me-1"></i>{% if analise.convidados_estimados %}~{{ analise.convidados_estimados }} pessoas{% else %}Nº de pessoas não informado{% endif %}
+            </span>
+          </div>
+          <p class="mb-2">{{ analise.resumo }}</p>
+          {% if analise.pontos_de_atencao %}
+            <h6 class="small fw-semibold mb-1">Pontos de atenção</h6>
+            <ul class="small mb-2">
+              {% for ponto in analise.pontos_de_atencao %}<li>{{ ponto }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="small text-secondary mb-0">
+            <i class="bi bi-info-circle me-1"></i>Gerado automaticamente em {{ reserva.analise_ia_em|date:"d/m/Y H:i" }} — sugestão de apoio, não substitui a avaliação da administradora.
+          </p>
+        {% else %}
+          <p class="text-secondary small mb-0">
+            {% if ia_habilitada %}Este pedido ainda não tem análise. Use "Reanalisar com IA".{% else %}A IA está desativada (sem GEMINI_API_KEY).{% endif %}
+          </p>
+        {% endif %}
+        {% endwith %}
+      </div>
+    </div>
+    {% endif %}
+
     <!-- HISTÓRICO (HistoricoReserva) -->
     <div class="card border-0 shadow-sm mt-4">
       <div class="card-body p-4">

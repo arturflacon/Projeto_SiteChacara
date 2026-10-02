@@ -1,0 +1,105 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}Uso da IA — Sítio de Lurdes{% endblock %}
+{% block extra_css %}{% include 'website/datatables-css.html' %}{% endblock %}
+{% block extra_js %}{% include 'website/datatables-js.html' %}{% endblock %}
+
+{% block main %}
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h2 class="fw-display mb-0"><i class="bi bi-cpu me-2 text-primary"></i>Uso da IA</h2>
+  <span class="badge bg-light text-dark border">Modelo: {{ modelo_ia }}</span>
+</div>
+<p class="text-secondary small mb-4">
+  Tokens e custo de cada chamada ao Gemini. Preços usados no cálculo:
+  US$ {{ preco_entrada_milhao|floatformat:2 }} por 1 milhão de tokens de entrada,
+  US$ {{ preco_saida_milhao|floatformat:2 }} por 1 milhão de tokens de saída,
+  câmbio R$ {{ cotacao|floatformat:2 }}. O texto das conversas não é armazenado.
+</p>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body p-4 pb-1">
+    {% include 'website/form-filter.html' %}
+  </div>
+</div>
+
+<!-- Resumo (sobre o resultado do filtro) -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <small class="text-secondary">Chamadas</small>
+      <p class="fs-4 fw-bold mb-0">{{ totais.chamadas }}</p>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <small class="text-secondary">Tokens de entrada / saída</small>
+      <p class="fs-5 fw-bold mb-0">{{ totais.entrada|default:0 }} / {{ totais.saida|default:0 }}</p>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <small class="text-secondary">Custo total</small>
+      <p class="fs-5 fw-bold mb-0">US$ {{ totais.custo|floatformat:6 }}</p>
+      <small class="text-secondary">≈ R$ {{ totais.custo_brl|floatformat:4 }}</small>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body small">
+      <span class="text-secondary">Custo médio por chamada</span>
+      <div class="mt-1">
+        <strong>Chat:</strong>
+        {% if media_chat %}US$ {{ media_chat.custo_medio|floatformat:7 }} (R$ {{ media_chat.custo_medio_brl|floatformat:5 }}){% else %}—{% endif %}
+      </div>
+      <div>
+        <strong>Análise:</strong>
+        {% if media_analise %}US$ {{ media_analise.custo_medio|floatformat:7 }} (R$ {{ media_analise.custo_medio_brl|floatformat:5 }}){% else %}—{% endif %}
+      </div>
+    </div></div>
+  </div>
+</div>
+
+{% if usos %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle table-datatable">
+      <thead class="table-light">
+        <tr>
+          <th>Data</th>
+          <th>Tipo</th>
+          <th>Tokens de entrada</th>
+          <th>Tokens de saída</th>
+          <th>Custo (US$)</th>
+          <th>Custo (R$)</th>
+          <th>Usuário</th>
+          <th>Reserva</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usos %}
+        <tr>
+          <td class="text-nowrap" data-sort="{{ u.data|date:'Y-m-d H:i:s' }}">{{ u.data|date:"d/m/Y H:i" }}</td>
+          <td>
+            {% if u.tipo == 'CHAT' %}<span class="badge bg-info">Chat</span>{% else %}<span class="badge bg-primary">Análise</span>{% endif %}
+          </td>
+          <td>{{ u.tokens_entrada }}</td>
+          <td>{{ u.tokens_saida }}</td>
+          <td data-sort="{{ u.custo_usd|stringformat:'.8f' }}">{{ u.custo_usd|floatformat:7 }}</td>
+          <td data-sort="{{ u.custo_brl|stringformat:'.8f' }}">{{ u.custo_brl|floatformat:5 }}</td>
+          <td>{% if u.usuario %}{{ u.usuario.username }}{% else %}<span class="text-secondary">visitante</span>{% endif %}</td>
+          <td>{% if u.reserva %}<a href="{% url 'reserva_detail' u.reserva.pk %}">#{{ u.reserva.pk }}</a>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include 'website/paginacao.html' %}
+{% elif filter.is_bound %}
+  <div class="alert alert-warning">
+    <i class="bi bi-search me-2"></i>Nenhuma chamada encontrada com esses filtros.
+  </div>
+{% else %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>Nenhuma chamada à IA registrada ainda.
+  </div>
+{% endif %}
+{% endblock %}

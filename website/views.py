@@ -1,13 +1,21 @@
+import json
+import time
+from decimal import Decimal
+
 from braces.views import GroupRequiredMixin
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
+from django.conf import settings
 from django.db import transaction
+from django.db.models import Avg, Count, Sum
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.views import View
 from django.views.generic import (
     CreateView, DeleteView, DetailView, FormView,
     TemplateView, UpdateView,
@@ -15,15 +23,16 @@ from django.views.generic import (
 from django.views.generic.detail import SingleObjectMixin
 from django_filters.views import FilterView
 
+from . import ia
 from .filters import (
     MinhasReservasFilter, ReservaAdminFilter,
-    ReservaConfirmadaFilter, ReservaPendenteFilter,
+    ReservaConfirmadaFilter, ReservaPendenteFilter, UsoIAFilter,
 )
 from .forms import (
     ClienteForm, DecisaoReservaForm, ReservaAdminForm,
     ReservaClienteForm, SignupForm,
 )
-from .models import Administrador, Chacara, Cliente, HistoricoReserva, Reserva
+from .models import Administrador, Chacara, Cliente, HistoricoReserva, Reserva, UsoIA
 
 
 GRUPO_ADMIN = 'Administradores'
@@ -223,6 +232,9 @@ class ReservaCreate(LoginRequiredMixin, SuccessMessageMixin, CreateView):
             response = super().form_valid(form)
             # Depois do super(), self.object é a reserva já salva.
             registrar_historico(self.object, '', self.request.user, 'Pedido criado pelo cliente.')
+        # Fora da transação: o pedido já está salvo. Se a IA falhar ou estiver
+        # desligada, analisar_pedido só devolve None e o fluxo segue.
+        ia.analisar_pedido(self.object, usuario=self.request.user)
         return response
 
 
@@ -302,6 +314,16 @@ class MinhaReservaUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView
     def get_queryset(self):
         return Reserva.objects.filter(
             cliente__usuario=self.request.user, status=Reserva.STATUS_PENDENTE)
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # As observações podem ter mudado: refaz a análise. Se não der para
+        # refazer, apaga a antiga para a admin não ver uma análise desatualizada.
+        if ia.analisar_pedido(self.object, usuario=self.request.user) is None and self.object.analise_ia:
+            self.object.analise_ia = None
+            self.object.analise_ia_em = None
+            self.object.save(update_fields=['analise_ia', 'analise_ia_em'])
+        return response
 
 
 class MinhaReservaDeleteView(LoginRequiredMixin, DeleteView):
@@ -545,3 +567,135 @@ class AdministradorCreate(AdminRequiredMixin, SuccessMessageMixin, CreateView):
         grupo, _ = Group.objects.get_or_create(name=GRUPO_ADMIN)
         self.object.usuario.groups.add(grupo)
         return response
+
+
+# ---------------------------------------------------------------------------
+# IA generativa (Gemini)
+# ---------------------------------------------------------------------------
+
+class ChatbotMensagemView(View):
+    """Modo A: recebe a pergunta, chama o assistente e devolve JSON.
+
+    Público (visitante também usa), com CSRF obrigatório e limite de
+    mensagens por hora para conter o custo.
+    """
+    http_method_names = ['post']
+    LIMITE_POR_HORA = 15
+
+    def _mensagem(self, request):
+        if request.content_type == 'application/json':
+            try:
+                dados = json.loads(request.body or b'{}')
+            except ValueError:
+                return ''
+            valor = dados.get('mensagem', '') if isinstance(dados, dict) else ''
+            return valor if isinstance(valor, str) else ''
+        return request.POST.get('mensagem', '')
+
+    def _dentro_do_limite(self, request):
+        """Rate limit simples por sessão: guarda os horários dos envios da última hora."""
+        agora = time.time()
+        envios = [t for t in request.session.get('chat_ia_envios', []) if agora - t < 3600]
+        if len(envios) >= self.LIMITE_POR_HORA:
+            request.session['chat_ia_envios'] = envios
+            return False
+        request.session['chat_ia_envios'] = envios + [agora]
+        return True
+
+    def post(self, request, *args, **kwargs):
+        mensagem = self._mensagem(request).strip()
+        if not mensagem:
+            return JsonResponse({'erro': 'Escreva sua pergunta.'}, status=400)
+        if len(mensagem) > ia.MAX_CARACTERES_MENSAGEM:
+            return JsonResponse(
+                {'erro': f'A mensagem pode ter no máximo {ia.MAX_CARACTERES_MENSAGEM} caracteres.'},
+                status=400,
+            )
+        if not ia.ia_habilitada():
+            return JsonResponse({'erro': 'Assistente indisponível no momento.'}, status=503)
+        if not self._dentro_do_limite(request):
+            return JsonResponse(
+                {'erro': 'Você atingiu o limite de mensagens por hora. Tente novamente mais tarde '
+                         'ou consulte a página de Disponibilidade.'},
+                status=429,
+            )
+
+        historico = request.session.get('chat_ia', [])[-ia.MAX_MENSAGENS_HISTORICO:]
+        resposta = ia.responder_chat(historico, mensagem, usuario=request.user)
+        if resposta is None:
+            return JsonResponse(
+                {'erro': 'Não consegui responder agora. Tente novamente em instantes.'}, status=503)
+
+        historico += [{'role': 'user', 'text': mensagem}, {'role': 'model', 'text': resposta}]
+        # Guarda só as últimas 10 trocas: é o que será reenviado no próximo turno.
+        request.session['chat_ia'] = historico[-ia.MAX_MENSAGENS_HISTORICO:]
+        return JsonResponse({'resposta': resposta})
+
+
+class ChatbotLimparView(View):
+    """Botão "Nova conversa": apaga o histórico da sessão."""
+    http_method_names = ['post']
+
+    def post(self, request, *args, **kwargs):
+        request.session.pop('chat_ia', None)
+        return JsonResponse({'ok': True})
+
+
+class ReanalisarPedidoView(AdminRequiredMixin, View):
+    """Modo B sob demanda: a admin pede uma nova análise do pedido."""
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        reserva = get_object_or_404(Reserva.objects.select_related('chacara'), pk=pk)
+        if not ia.ia_habilitada():
+            messages.warning(request, 'A IA está desativada: configure a GEMINI_API_KEY.')
+        elif ia.analisar_pedido(reserva, usuario=request.user):
+            messages.success(request, 'Análise da IA atualizada.')
+        else:
+            messages.error(request, 'Não foi possível gerar a análise agora. Tente novamente mais tarde.')
+        return redirect('reserva_detail', pk=reserva.pk)
+
+
+class UsoIAListView(AdminRequiredMixin, FilterView):
+    """Métricas de tokens e custo de cada chamada ao Gemini."""
+    model = UsoIA
+    template_name = 'website/uso_ia_list.html'
+    context_object_name = 'usos'
+    filterset_class = UsoIAFilter
+    paginate_by = 20
+    ordering = ['-data']
+
+    def get_queryset(self):
+        # select_related: a tabela mostra o usuário e o nº da reserva; sem
+        # isto seriam até 2 consultas extras por linha.
+        return super().get_queryset().select_related('usuario', 'reserva')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Resumo sobre o resultado do filtro (todas as páginas, não só a atual).
+        filtrado = self.object_list.order_by()
+        cotacao = Decimal(str(settings.GEMINI_COTACAO_BRL))
+        totais = filtrado.aggregate(
+            chamadas=Count('id'),
+            entrada=Sum('tokens_entrada'),
+            saida=Sum('tokens_saida'),
+            custo=Sum('custo_usd'),
+        )
+        totais['custo'] = totais['custo'] or Decimal('0')
+        totais['custo_brl'] = totais['custo'] * cotacao
+        por_tipo = {
+            linha['tipo']: linha
+            for linha in filtrado.values('tipo').annotate(chamadas=Count('id'), custo_medio=Avg('custo_usd'))
+        }
+        for linha in por_tipo.values():
+            linha['custo_medio_brl'] = Decimal(linha['custo_medio']) * cotacao
+        ctx.update(
+            totais=totais,
+            media_chat=por_tipo.get(UsoIA.CHAT),
+            media_analise=por_tipo.get(UsoIA.ANALISE),
+            preco_entrada_milhao=settings.GEMINI_PRECO_ENTRADA_USD * 1_000_000,
+            preco_saida_milhao=settings.GEMINI_PRECO_SAIDA_USD * 1_000_000,
+            cotacao=settings.GEMINI_COTACAO_BRL,
+            modelo_ia=settings.GEMINI_MODEL,
+        )
+        return ctx

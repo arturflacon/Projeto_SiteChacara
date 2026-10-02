@@ -23,6 +23,8 @@ from .views import (
     AdministradorCreate,
     # Cliente
     ClienteUpdate,
+    # IA (Gemini)
+    ChatbotMensagemView, ChatbotLimparView, ReanalisarPedidoView, UsoIAListView,
 )
 
 urlpatterns = [
@@ -57,6 +59,7 @@ urlpatterns = [
     path('reservas/<int:pk>/editar/', ReservaUpdateView.as_view(), name='reserva_update'),
     path('reservas/<int:pk>/excluir/', ReservaDeleteView.as_view(), name='reserva_delete'),
     path('reservas/<int:pk>/', ReservaDetailView.as_view(), name='reserva_detail'),
+    path('reservas/<int:pk>/reanalisar/', ReanalisarPedidoView.as_view(), name='reserva_reanalisar'),
 
     # --- Chácara (admin — só edição) ---
     path('chacara/<int:pk>/editar/', ChacaraUpdate.as_view(), name='chacara_update'),
@@ -66,4 +69,9 @@ urlpatterns = [
 
     # --- Cliente ---
     path('cliente/<int:pk>/editar/', ClienteUpdate.as_view(), name='cliente_update'),
+
+    # --- IA (Gemini) ---
+    path('ia/chat/', ChatbotMensagemView.as_view(), name='chatbot_mensagem'),
+    path('ia/chat/limpar/', ChatbotLimparView.as_view(), name='chatbot_limpar'),
+    path('ia/uso/', UsoIAListView.as_view(), name='uso_ia'),
 ]

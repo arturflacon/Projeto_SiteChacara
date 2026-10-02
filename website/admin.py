@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Administrador, Chacara, Cliente, HistoricoReserva, Reserva
+from .models import Administrador, Chacara, Cliente, HistoricoReserva, Reserva, UsoIA
 
 
 @admin.register(Cliente)
@@ -43,7 +43,7 @@ class ReservaAdmin(admin.ModelAdmin):
     list_filter = ['status', 'chacara']
     search_fields = ['cliente__nome', 'chacara__nome']
     date_hierarchy = 'data_inicio'
-    readonly_fields = ['data_pedido', 'valor_total']
+    readonly_fields = ['data_pedido', 'valor_total', 'analise_ia', 'analise_ia_em']
     # Evita N+1: as colunas "cliente" e "chacara" (e o __str__) fariam
     # 2 consultas extras por linha da listagem.
     list_select_related = ['cliente', 'chacara']
@@ -58,3 +58,14 @@ class HistoricoReservaAdmin(admin.ModelAdmin):
     # Evita N+1: o __str__ da reserva acessa cliente e chácara, e a coluna
     # "alterado_por" acessa o User — sem isto seriam 3 consultas por linha.
     list_select_related = ['reserva__cliente', 'reserva__chacara', 'alterado_por']
+
+
+@admin.register(UsoIA)
+class UsoIAAdmin(admin.ModelAdmin):
+    list_display = ['data', 'tipo', 'tokens_entrada', 'tokens_saida', 'custo_usd', 'usuario', 'reserva']
+    list_filter = ['tipo']
+    date_hierarchy = 'data'
+    readonly_fields = ['custo_usd', 'data']
+    # Evita N+1: as colunas "usuario" e "reserva" (o __str__ da reserva lê
+    # cliente e chácara) fariam várias consultas por linha.
+    list_select_related = ['usuario', 'reserva__cliente', 'reserva__chacara']
