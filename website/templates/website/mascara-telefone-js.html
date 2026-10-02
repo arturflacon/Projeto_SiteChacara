@@ -1,0 +1,16 @@
+{# jQuery Mask Plugin: máscara nos campos com a classe "mascara-telefone" (ver TelefoneField em forms.py). #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+  $(function () {
+    // Celular (11 dígitos): (00) 00000-0000 — fixo (10 dígitos): (00) 0000-0000.
+    // O servidor (clean_telefone) remove a máscara e guarda só os dígitos.
+    var mascaraTelefone = function (valor) {
+      return valor.replace(/\D/g, '').length === 11 ? '(00) 00000-0000' : '(00) 0000-00009';
+    };
+    $('.mascara-telefone').mask(mascaraTelefone, {
+      onKeyPress: function (valor, e, campo, opcoes) {
+        campo.mask(mascaraTelefone.apply({}, arguments), opcoes);
+      }
+    });
+  });
+</script>

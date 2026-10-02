@@ -1,0 +1,5 @@
+{% load static %}
+{# JS do DataTables + inicialização única. Incluir no block extra_js das listas (o jQuery já vem do modelo.html). #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net/2.1.8/dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs5/2.1.8/dataTables.bootstrap5.min.js"></script>
+<script src="{% static "js/datatables-init.js" %}"></script>

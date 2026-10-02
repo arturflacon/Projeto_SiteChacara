@@ -1,4 +1,5 @@
 {% extends "website/modelo.html" %}
+{% load sitio_tags %}
 
 {% block title %}Reserva #{{ reserva.pk }} — Sítio de Lurdes{% endblock %}
 
@@ -10,7 +11,11 @@
       <h2 class="fw-display mb-0">
         <i class="bi bi-receipt me-2 text-primary"></i>Detalhes da Reserva
       </h2>
+      {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+      <a href="{% url 'reservas_todas' %}" class="btn btn-outline-secondary btn-sm">
+      {% else %}
       <a href="{% url 'minhas_reservas' %}" class="btn btn-outline-secondary btn-sm">
+      {% endif %}
         <i class="bi bi-arrow-left me-1"></i>Voltar
       </a>
     </div>
@@ -66,7 +71,7 @@
         </h5>
         <p class="mb-1"><strong>{{ reserva.cliente.nome }}</strong></p>
         <p class="text-secondary small mb-4">
-          <i class="bi bi-telephone me-1"></i>{{ reserva.cliente.telefone }}
+          <i class="bi bi-telephone me-1"></i>{{ reserva.cliente.telefone|telefone }}
         </p>
 
         {% if reserva.observacoes %}
@@ -103,9 +108,17 @@
           {% endif %}
         </div>
 
-        {% if user.is_superuser or user.administrador %}
+        {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
         <hr>
         <div class="d-flex gap-2 flex-wrap">
+          {% if reserva.status == 'PENDENTE' %}
+          <a href="{% url 'reserva_aprovar' reserva.pk %}" class="btn btn-success">
+            <i class="bi bi-check-lg me-1"></i>Aprovar
+          </a>
+          <a href="{% url 'reserva_recusar' reserva.pk %}" class="btn btn-danger">
+            <i class="bi bi-x-lg me-1"></i>Recusar
+          </a>
+          {% endif %}
           <a href="{% url 'reserva_update' reserva.pk %}" class="btn btn-outline-primary">
             <i class="bi bi-pencil me-1"></i>Editar
           </a>
@@ -125,6 +138,40 @@
         </div>
         {% endif %}
 
+      </div>
+    </div>
+
+    <!-- HISTÓRICO (HistoricoReserva) -->
+    <div class="card border-0 shadow-sm mt-4">
+      <div class="card-body p-4">
+        <h5 class="fw-display text-primary mb-3">
+          <i class="bi bi-clock-history me-1"></i>Histórico
+        </h5>
+        {% with historico=reserva.historico.all %}
+        {% if historico %}
+          <ul class="list-unstyled mb-0">
+            {% for h in historico %}
+            <li class="d-flex gap-3 {% if not forloop.last %}pb-3 mb-3 border-bottom{% endif %}">
+              <i class="bi bi-arrow-right-circle text-primary fs-5"></i>
+              <div>
+                <div class="small text-secondary">
+                  {{ h.data|date:"d/m/Y H:i" }}
+                  {% if h.alterado_por %}· por <strong>{{ h.alterado_por.get_full_name|default:h.alterado_por.username }}</strong>{% endif %}
+                </div>
+                <div>
+                  {% if h.status_anterior %}{{ h.get_status_anterior_display }}{% else %}Novo pedido{% endif %}
+                  <i class="bi bi-arrow-right mx-1"></i>
+                  <strong>{{ h.get_status_novo_display }}</strong>
+                </div>
+                {% if h.observacao %}<div class="small text-secondary">{{ h.observacao }}</div>{% endif %}
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-secondary small mb-0">Nenhuma alteração registrada.</p>
+        {% endif %}
+        {% endwith %}
       </div>
     </div>
   </div>

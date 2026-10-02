@@ -72,7 +72,8 @@ class Reserva(models.Model):
         verbose_name='Data de Início', help_text='Data de chegada na chácara.'
     )
     data_fim = models.DateField(
-        verbose_name='Data de Fim', help_text='Data de saída da chácara.'
+        verbose_name='Data de Fim',
+        help_text='Data de saída da chácara (deve ser posterior à data de chegada).'
     )
     valor_total = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
@@ -103,21 +104,28 @@ class Reserva(models.Model):
     def __str__(self):
         return f"Reserva de {self.cliente.nome} — {self.chacara.nome} ({self.data_inicio} a {self.data_fim})"
 
+    def sobrepostas(self, status):
+        """Outras reservas da mesma chácara, no status informado, que se
+        sobrepõem a este período. O dia de saída fica livre para nova entrada."""
+        qs = Reserva.objects.filter(
+            chacara_id=self.chacara_id,
+            status=status,
+            data_inicio__lt=self.data_fim,
+            data_fim__gt=self.data_inicio,
+        )
+        if self.pk:
+            qs = qs.exclude(pk=self.pk)
+        return qs
+
     def clean(self):
         if self.data_inicio and self.data_fim:
             if self.data_fim < self.data_inicio:
-                raise ValidationError({'data_fim': 'A data de fim não pode ser anterior à data de início.'})
+                raise ValidationError({'data_fim': 'A data de saída não pode ser anterior à data de chegada.'})
+            if self.data_fim == self.data_inicio:
+                raise ValidationError({'data_fim': 'A data de saída deve ser posterior à data de chegada (mínimo de 1 diária).'})
 
             if self.chacara_id:
-                conflitos = Reserva.objects.filter(
-                    chacara_id=self.chacara_id,
-                    status=self.STATUS_CONFIRMADA,
-                    data_inicio__lt=self.data_fim,
-                    data_fim__gt=self.data_inicio,
-                )
-                if self.pk:
-                    conflitos = conflitos.exclude(pk=self.pk)
-                if conflitos.exists():
+                if self.sobrepostas(self.STATUS_CONFIRMADA).exists():
                     raise ValidationError(
                         'Já existe uma reserva confirmada que se sobrepõe a estas datas. '
                         'Consulte o calendário de disponibilidade antes de escolher as datas.'
@@ -129,3 +137,40 @@ class Reserva(models.Model):
             if dias > 0:
                 self.valor_total = self.chacara.preco_diaria * dias
         super().save(*args, **kwargs)
+
+
+class HistoricoReserva(models.Model):
+    """Registro de cada mudança de status de uma reserva (o "movimento")."""
+
+    reserva = models.ForeignKey(
+        Reserva, on_delete=models.CASCADE, related_name='historico',
+        verbose_name='Reserva', help_text='Reserva cujo status foi alterado.'
+    )
+    status_anterior = models.CharField(
+        max_length=20, choices=Reserva.STATUS_CHOICES, blank=True,
+        verbose_name='Status Anterior', help_text='Status antes da alteração (vazio na criação do pedido).'
+    )
+    status_novo = models.CharField(
+        max_length=20, choices=Reserva.STATUS_CHOICES,
+        verbose_name='Status Novo', help_text='Status depois da alteração.'
+    )
+    alterado_por = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        verbose_name='Alterado por', help_text='Usuário que fez a alteração.'
+    )
+    data = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Data', help_text='Data e hora da alteração.'
+    )
+    observacao = models.TextField(
+        blank=True,
+        verbose_name='Observação', help_text='Motivo ou detalhe da alteração.'
+    )
+
+    class Meta:
+        verbose_name = 'Histórico de Reserva'
+        verbose_name_plural = 'Históricos de Reserva'
+        ordering = ['-data']
+
+    def __str__(self):
+        return f"Reserva #{self.reserva_id}: {self.status_anterior or '—'} → {self.status_novo}"

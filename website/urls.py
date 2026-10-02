@@ -14,7 +14,8 @@ from .views import (
     ReservaCreate, MinhasReservasListView,
     MinhaReservaDetailView, MinhaReservaUpdateView, MinhaReservaDeleteView,
     # Admin — reservas
-    PedidosPendentesListView, AprovarReservaView, RecusarReservaView,
+    PedidosPendentesListView, TodasReservasListView,
+    AprovarReservaView, RecusarReservaView,
     ReservaUpdateView, ReservaDeleteView,
     # Admin — chácara (só edição)
     ChacaraUpdate,
@@ -50,6 +51,7 @@ urlpatterns = [
 
     # --- Reservas (admin) ---
     path('reservas/pendentes/', PedidosPendentesListView.as_view(), name='pedidos_pendentes'),
+    path('reservas/todas/', TodasReservasListView.as_view(), name='reservas_todas'),
     path('reservas/<int:pk>/aprovar/', AprovarReservaView.as_view(), name='reserva_aprovar'),
     path('reservas/<int:pk>/recusar/', RecusarReservaView.as_view(), name='reserva_recusar'),
     path('reservas/<int:pk>/editar/', ReservaUpdateView.as_view(), name='reserva_update'),
@@ -64,5 +66,4 @@ urlpatterns = [
 
     # --- Cliente ---
     path('cliente/<int:pk>/editar/', ClienteUpdate.as_view(), name='cliente_update'),
-    
 ]

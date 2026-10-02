@@ -11,12 +11,3 @@ psycopg2-binary==2.9.12
 python-dotenv==1.1.0
 python-dateutil==2.9.0.post0
 gunicorn
-
-
-## .venv\Scripts\python.exe manage.py createsuperuser  
-## .venv\Scripts\python.exe manage.py runserver
-## https://naes2026-500619.rj.r.appspot.com
-## DATABASE_URL=postgresql://neondb_owner:npg_HY9vRp2qPIdF@ep-misty-violet-amley9it-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-## SECRET_KEY=django-insecure-dev-only-key-change-in-production
-## DEBUG=True
-## ALLOWED_HOSTS=*

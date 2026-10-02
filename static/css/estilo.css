@@ -11,6 +11,13 @@
       --petrol-subtle:   #e4f4f7;
       --petrol-muted:    #a8d8e2;
 
+      /* Escala numérica usada em sobre.html, mapeada na paleta acima */
+      --petrol-50:       var(--petrol-subtle);
+      --petrol-100:      var(--petrol-muted);
+      --petrol-200:      var(--petrol);
+      --petrol-700:      var(--petrol-dark);
+      --petrol-900:      var(--petrol-darker);
+
       /* Paleta semântica customizada */
       --cp-primary:      #1B6B7B;   /* petróleo   */
       --cp-primary-rgb:  27,107,123;

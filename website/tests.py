@@ -1,13 +1,15 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from .forms import ClienteForm, ReservaClienteForm
 from .models import Administrador, Chacara, Cliente, Reserva
+from .templatetags.sitio_tags import telefone
 
 
 def make_chacara(**kwargs):
@@ -328,3 +330,321 @@ class DataTablesListagensTest(TestCase):
         response = Client().get(reverse('calendario_reservas'))
         self.assertContains(response, self.TABELA)
         self.assertContains(response, '<td data-sort="2026-12-06">06/12/2026</td>')
+
+
+# ---------------------------------------------------------------------------
+# 3º trimestre: movimento, filtros, paginação, telefone e validação de datas
+# ---------------------------------------------------------------------------
+
+class MovimentoReservaTest(TestCase):
+    """form_valid das views gravando HistoricoReserva e recusando conflitos."""
+
+    def setUp(self):
+        self.chacara = make_chacara()
+        self.user = make_user()
+        self.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=self.user)
+        self.outro = Cliente.objects.create(
+            nome='Maria Souza', telefone='11888887777', usuario=make_user(username='maria'))
+        self.admin_user = make_admin_user()
+        self.hoje = date.today()
+        self.admin = Client()
+        self.admin.login(username='adminuser', password='testpass123')
+
+    def _reserva(self, cliente=None, inicio=10, fim=13, status=Reserva.STATUS_PENDENTE):
+        return Reserva.objects.create(
+            cliente=cliente or self.cliente,
+            chacara=self.chacara,
+            data_inicio=self.hoje + timedelta(days=inicio),
+            data_fim=self.hoje + timedelta(days=fim),
+            status=status,
+        )
+
+    def test_aprovar_recusa_pendentes_sobrepostos_e_grava_historico(self):
+        aprovada = self._reserva(inicio=10, fim=13)
+        conflitante = self._reserva(cliente=self.outro, inicio=12, fim=15)
+        # Começa no dia da saída da aprovada: não conflita.
+        vizinha = self._reserva(cliente=self.outro, inicio=13, fim=16)
+
+        response = self.admin.post(reverse('reserva_aprovar', args=[aprovada.pk]))
+        self.assertRedirects(response, reverse('pedidos_pendentes'))
+
+        for r in (aprovada, conflitante, vizinha):
+            r.refresh_from_db()
+        self.assertEqual(aprovada.status, Reserva.STATUS_CONFIRMADA)
+        self.assertEqual(conflitante.status, Reserva.STATUS_RECUSADA)
+        self.assertIsNotNone(conflitante.data_decisao)
+        self.assertEqual(vizinha.status, Reserva.STATUS_PENDENTE)
+
+        h = aprovada.historico.get()
+        self.assertEqual((h.status_anterior, h.status_novo), (Reserva.STATUS_PENDENTE, Reserva.STATUS_CONFIRMADA))
+        self.assertEqual(h.alterado_por, self.admin_user)
+        h = conflitante.historico.get()
+        self.assertEqual(h.status_novo, Reserva.STATUS_RECUSADA)
+        self.assertIn('Recusado automaticamente', h.observacao)
+        self.assertFalse(vizinha.historico.exists())
+
+    def test_nao_aprova_pedido_que_conflita_com_confirmada(self):
+        self._reserva(cliente=self.outro, inicio=10, fim=15, status=Reserva.STATUS_CONFIRMADA)
+        pedido = self._reserva(inicio=12, fim=14)
+
+        response = self.admin.post(reverse('reserva_aprovar', args=[pedido.pk]), follow=True)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, Reserva.STATUS_PENDENTE)
+        self.assertFalse(pedido.historico.exists())
+        self.assertContains(response, 'já existe uma reserva confirmada nesse período')
+        self.assertContains(response, 'text-bg-danger')  # MESSAGE_TAGS: error -> danger
+
+    def test_tela_de_aprovacao_registra_observacao(self):
+        pedido = self._reserva()
+        self.assertEqual(self.admin.get(reverse('reserva_aprovar', args=[pedido.pk])).status_code, 200)
+        self.admin.post(reverse('reserva_aprovar', args=[pedido.pk]), {'observacao': 'Sinal pago.'})
+        self.assertEqual(pedido.historico.get().observacao, 'Sinal pago.')
+
+    def test_recusar_grava_historico(self):
+        pedido = self._reserva()
+        self.admin.post(reverse('reserva_recusar', args=[pedido.pk]))
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, Reserva.STATUS_RECUSADA)
+        self.assertIsNotNone(pedido.data_decisao)
+        self.assertEqual(pedido.historico.get().status_novo, Reserva.STATUS_RECUSADA)
+
+    def test_cliente_cancelando_muda_status_e_nao_apaga(self):
+        pedido = self._reserva()
+        c = Client()
+        c.login(username='clienteuser', password='testpass123')
+        response = c.post(reverse('minha_reserva_delete', args=[pedido.pk]))
+        self.assertRedirects(response, reverse('minhas_reservas'))
+
+        pedido.refresh_from_db()  # continua existindo
+        self.assertEqual(pedido.status, Reserva.STATUS_CANCELADA)
+        h = pedido.historico.get()
+        self.assertEqual((h.status_anterior, h.status_novo), (Reserva.STATUS_PENDENTE, Reserva.STATUS_CANCELADA))
+        self.assertEqual(h.alterado_por, self.user)
+
+    def test_criar_pedido_grava_historico_inicial(self):
+        c = Client()
+        c.login(username='clienteuser', password='testpass123')
+        c.post(reverse('reserva_create'), {
+            'data_inicio': (self.hoje + timedelta(days=20)).isoformat(),
+            'data_fim': (self.hoje + timedelta(days=22)).isoformat(),
+            'observacoes': '',
+        })
+        reserva = Reserva.objects.get(cliente=self.cliente)
+        h = reserva.historico.get()
+        self.assertEqual((h.status_anterior, h.status_novo), ('', Reserva.STATUS_PENDENTE))
+        self.assertEqual(h.alterado_por, self.user)
+
+    def test_edicao_admin_que_muda_status_grava_historico(self):
+        pedido = self._reserva()
+        self.admin.post(reverse('reserva_update', args=[pedido.pk]), {
+            'chacara': self.chacara.pk,
+            'data_inicio': pedido.data_inicio.isoformat(),
+            'data_fim': pedido.data_fim.isoformat(),
+            'observacoes': '',
+            'status': Reserva.STATUS_CONFIRMADA,
+        })
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, Reserva.STATUS_CONFIRMADA)
+        self.assertIsNotNone(pedido.data_decisao)
+        self.assertEqual(pedido.historico.get().status_novo, Reserva.STATUS_CONFIRMADA)
+
+    def test_historico_aparece_no_detalhe(self):
+        pedido = self._reserva()
+        self.admin.post(reverse('reserva_aprovar', args=[pedido.pk]))
+        response = self.admin.get(reverse('reserva_detail', args=[pedido.pk]))
+        self.assertContains(response, 'Histórico')
+        self.assertContains(response, 'Confirmada</strong>')
+
+    def test_admin_sem_perfil_cliente_nao_faz_pedido(self):
+        response = self.admin.get(reverse('reserva_create'), follow=True)
+        self.assertRedirects(response, reverse('pedidos_pendentes'))
+        self.assertContains(response, 'Apenas clientes fazem pedidos')
+
+    def test_admin_so_pelo_grupo_ve_detalhe_e_menu(self):
+        user = make_user(username='dogrupo')
+        user.groups.add(Group.objects.get_or_create(name='Administradores')[0])
+        pedido = self._reserva()
+        c = Client()
+        c.login(username='dogrupo', password='testpass123')
+        response = c.get(reverse('reserva_detail', args=[pedido.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('reservas_todas'))  # menu Admin + botão Voltar
+
+
+class FiltrosTerceiroTrimestreTest(TestCase):
+    """django-filter com icontains, exact, gte e lte."""
+
+    def setUp(self):
+        self.chacara = make_chacara()
+        self.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=make_user())
+        self.outro = Cliente.objects.create(
+            nome='Maria Souza', telefone='11888887777', usuario=make_user(username='maria'))
+        make_admin_user()
+        self.hoje = date.today()
+
+    def _reserva(self, cliente=None, dias=10, status=Reserva.STATUS_PENDENTE):
+        inicio = self.hoje + timedelta(days=dias)
+        return Reserva.objects.create(
+            cliente=cliente or self.cliente, chacara=self.chacara,
+            data_inicio=inicio, data_fim=inicio + timedelta(days=1), status=status,
+        )
+
+    def _navegador(self, username):
+        c = Client()
+        c.login(username=username, password='testpass123')
+        return c
+
+    def test_minhas_reservas_status_exact_so_do_proprio_cliente(self):
+        minha = self._reserva(status=Reserva.STATUS_CONFIRMADA)
+        self._reserva(cliente=self.outro, dias=20, status=Reserva.STATUS_CONFIRMADA)
+        self._reserva(dias=30)
+        response = self._navegador('clienteuser').get(
+            reverse('minhas_reservas'), {'status': Reserva.STATUS_CONFIRMADA})
+        self.assertEqual(list(response.context['reservas']), [minha])
+
+    def test_minhas_reservas_intervalo_de_datas(self):
+        self._reserva(dias=5)
+        dentro = self._reserva(dias=10)
+        self._reserva(dias=15)
+        dia = (self.hoje + timedelta(days=10)).isoformat()
+        response = self._navegador('clienteuser').get(
+            reverse('minhas_reservas'), {'data_inicio__gte': dia, 'data_inicio__lte': dia})
+        self.assertEqual(list(response.context['reservas']), [dentro])
+
+    def test_todas_reservas_nome_icontains(self):
+        joao = self._reserva()
+        self._reserva(cliente=self.outro)
+        response = self._navegador('adminuser').get(reverse('reservas_todas'), {'cliente__nome': 'SILV'})
+        self.assertEqual(list(response.context['reservas']), [joao])
+
+    def test_todas_reservas_intervalo_gte_lte_inclui_os_limites(self):
+        self._reserva(dias=4)
+        a = self._reserva(dias=5)
+        b = self._reserva(cliente=self.outro, dias=8)
+        self._reserva(dias=9)
+        response = self._navegador('adminuser').get(reverse('reservas_todas'), {
+            'data_inicio__gte': (self.hoje + timedelta(days=5)).isoformat(),
+            'data_inicio__lte': (self.hoje + timedelta(days=8)).isoformat(),
+        })
+        # ordering = ['-data_inicio']
+        self.assertEqual(list(response.context['reservas']), [b, a])
+
+    def test_todas_reservas_status_exact(self):
+        self._reserva()
+        recusada = self._reserva(dias=20, status=Reserva.STATUS_RECUSADA)
+        response = self._navegador('adminuser').get(reverse('reservas_todas'), {'status': 'RECUSADA'})
+        self.assertEqual(list(response.context['reservas']), [recusada])
+
+    def test_todas_reservas_restrita_ao_admin(self):
+        response = self._navegador('clienteuser').get(reverse('reservas_todas'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_paginacao_preserva_os_filtros(self):
+        for dias in range(11):
+            self._reserva(dias=dias)
+        self._reserva(cliente=self.outro)
+        c = self._navegador('adminuser')
+        url = reverse('reservas_todas')
+        filtros = {'cliente__nome': 'silva', 'status': 'PENDENTE'}
+
+        response = c.get(url, filtros)
+        self.assertContains(response, 'Página 1 de 2')
+        self.assertContains(response, 'href="?cliente__nome=silva&status=PENDENTE&page=2">Próxima</a>')
+
+        response = c.get(url, {**filtros, 'page': 2})
+        self.assertContains(response, 'href="?cliente__nome=silva&status=PENDENTE&page=1">Anterior</a>')
+        self.assertEqual(len(response.context['reservas']), 1)
+
+
+class TelefoneTest(TestCase):
+    """Máscara (00) 00000-0000 no navegador; só dígitos no banco."""
+
+    def test_cadastro_aceita_telefone_mascarado_e_salva_so_digitos(self):
+        response = Client().post(reverse('signup'), {
+            'username': 'novo', 'email': 'novo@exemplo.com',
+            'password1': 'SenhaForte!2026', 'password2': 'SenhaForte!2026',
+            'nome': 'Cliente Novo', 'telefone': '(46) 99999-8888',
+        })
+        self.assertRedirects(response, reverse('index'))
+        self.assertEqual(Cliente.objects.get(usuario__username='novo').telefone, '46999998888')
+
+    def test_meus_dados_aceita_telefone_mascarado(self):
+        cliente = Cliente.objects.create(nome='João', telefone='11999990000', usuario=make_user())
+        c = Client()
+        c.login(username='clienteuser', password='testpass123')
+        c.post(reverse('cliente_update', args=[cliente.pk]), {'nome': 'João', 'telefone': '(46) 3523-1234'})
+        cliente.refresh_from_db()
+        self.assertEqual(cliente.telefone, '4635231234')
+
+    def test_telefone_incompleto_e_invalido(self):
+        form = ClienteForm(data={'nome': 'X', 'telefone': '(46) 9999'})
+        self.assertFalse(form.is_valid())
+        self.assertIn('telefone', form.errors)
+
+    def test_filtro_telefone_formata(self):
+        self.assertEqual(telefone('46999998888'), '(46) 99999-8888')
+        self.assertEqual(telefone('4635231234'), '(46) 3523-1234')
+
+
+class ValidacaoDatasPedidoTest(TestCase):
+    def setUp(self):
+        self.chacara = make_chacara()
+        self.cliente = Cliente.objects.create(nome='João', telefone='11999990000', usuario=make_user())
+        self.hoje = date.today()
+
+    def _form(self, inicio, fim):
+        return ReservaClienteForm(data={
+            'data_inicio': inicio.isoformat(), 'data_fim': fim.isoformat(), 'observacoes': ''})
+
+    def test_data_no_passado_e_invalida(self):
+        form = self._form(self.hoje - timedelta(days=1), self.hoje + timedelta(days=2))
+        self.assertFalse(form.is_valid())
+        self.assertIn('data_inicio', form.errors)
+
+    def test_saida_igual_a_chegada_e_invalida(self):
+        dia = self.hoje + timedelta(days=5)
+        form = self._form(dia, dia)
+        self.assertFalse(form.is_valid())
+        self.assertIn('posterior', form.errors['data_fim'][0])
+
+    def test_model_exige_no_minimo_uma_diaria(self):
+        dia = self.hoje + timedelta(days=5)
+        reserva = Reserva(cliente=self.cliente, chacara=self.chacara, data_inicio=dia, data_fim=dia)
+        with self.assertRaises(ValidationError):
+            reserva.full_clean()
+
+
+class CalendarioEventosTest(TestCase):
+    """Eventos do FullCalendar montados no get_context_data."""
+
+    def setUp(self):
+        self.chacara = make_chacara()
+        self.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=make_user())
+        make_admin_user()
+        hoje = date.today()
+        self.futura = Reserva.objects.create(
+            cliente=self.cliente, chacara=self.chacara, status=Reserva.STATUS_CONFIRMADA,
+            data_inicio=hoje + timedelta(days=3), data_fim=hoje + timedelta(days=5))
+        Reserva.objects.create(  # já terminou: fica fora do calendário
+            cliente=self.cliente, chacara=self.chacara, status=Reserva.STATUS_CONFIRMADA,
+            data_inicio=hoje - timedelta(days=10), data_fim=hoje - timedelta(days=8))
+        Reserva.objects.create(  # pendente: fica fora do calendário
+            cliente=self.cliente, chacara=self.chacara,
+            data_inicio=hoje + timedelta(days=20), data_fim=hoje + timedelta(days=22))
+
+    def test_visitante_ve_so_reservado(self):
+        response = Client().get(reverse('calendario_reservas'))
+        self.assertEqual(response.context['eventos'], [{
+            'title': 'Reservado',
+            'start': self.futura.data_inicio.isoformat(),
+            'end': self.futura.data_fim.isoformat(),
+            'allDay': True,
+        }])
+        self.assertContains(response, 'id="eventos-data"')
+        self.assertNotContains(response, 'João Silva')
+
+    def test_admin_ve_nome_do_cliente(self):
+        c = Client()
+        c.login(username='adminuser', password='testpass123')
+        response = c.get(reverse('calendario_reservas'))
+        self.assertEqual(response.context['eventos'][0]['title'], 'Reservado — João Silva')
