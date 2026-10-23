@@ -10,9 +10,10 @@ mensagem pronta para mostrar ao usuário.
 """
 from django.contrib.auth.models import Group
 from django.db import transaction
+from django.db.models import Avg, Count
 from django.utils import timezone
 
-from .models import Chacara, HistoricoReserva, Reserva
+from .models import Avaliacao, Chacara, HistoricoReserva, Reserva
 
 GRUPO_ADMIN = 'Administradores'
 
@@ -73,6 +74,32 @@ def pedidos_pendentes():
         .select_related('cliente', 'chacara')
         .order_by('data_pedido')
     )
+
+
+def reservas_avaliaveis(usuario):
+    """Reservas que o usuário ainda pode avaliar.
+
+    Regra (documentada em Avaliacao): a própria reserva, CONFIRMADA, com a
+    estadia já concluída (data_fim <= hoje) e ainda sem avaliação.
+    """
+    return (
+        Reserva.objects
+        .filter(
+            cliente__usuario=usuario,
+            status=Reserva.STATUS_CONFIRMADA,
+            data_fim__lte=timezone.localdate(),
+            avaliacao__isnull=True,
+        )
+        .select_related('chacara')
+        .order_by('-data_inicio')
+    )
+
+
+def resumo_avaliacoes(chacara):
+    """Só o agregado (média e quantidade): nenhum comentário ou autor sai daqui."""
+    resumo = Avaliacao.objects.filter(reserva__chacara=chacara).aggregate(
+        media=Avg('nota'), total=Count('id'))
+    return {'media': resumo['media'], 'total': resumo['total']}
 
 
 # ---------------------------------------------------------------------------

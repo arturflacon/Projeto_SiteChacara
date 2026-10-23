@@ -17,8 +17,8 @@ from django.utils import timezone
 
 from . import ia, services
 from .forms import ClienteForm, ReservaClienteForm
-from .models import Administrador, Chacara, Cliente, Reserva, UsoIA
-from .templatetags.sitio_tags import telefone
+from .models import Administrador, Avaliacao, Chacara, Cliente, Reserva, UsoIA
+from .templatetags.sitio_tags import estrelas, telefone
 
 
 def make_chacara(**kwargs):
@@ -974,6 +974,190 @@ class MensagensTest(TestCase):
         self.assertEqual(len(mensagens), 1)
         self.assertEqual(mensagens[0].level_tag, 'danger')
         self.assertIn('já existe uma reserva confirmada', str(mensagens[0]))
+
+
+# ---------------------------------------------------------------------------
+# Registros por usuário — classe 2: Avaliacao (CRUD restrito ao dono)
+# ---------------------------------------------------------------------------
+
+class AvaliacaoTest(TestCase):
+    def setUp(self):
+        self.chacara = Chacara.objects.order_by('pk').first() or make_chacara()
+        self.hoje = timezone.localdate()
+        self.dono = make_user(username='dono')
+        self.cliente = Cliente.objects.create(nome='Dono', telefone='11999990000', usuario=self.dono)
+        self.intruso_user = make_user(username='intruso')
+        self.intruso_cliente = Cliente.objects.create(
+            nome='Intruso', telefone='11888887777', usuario=self.intruso_user)
+        self.concluida = self._reserva(self.cliente, -10, -7, Reserva.STATUS_CONFIRMADA)
+        self.avaliacao = Avaliacao.objects.create(
+            usuario=self.dono, reserva=self.concluida, nota=5, comentario='Lugar maravilhoso, comentário privado.')
+        self.c_dono = self._navegador('dono')
+        self.c_intruso = self._navegador('intruso')
+
+    def _reserva(self, cliente, inicio, fim, status):
+        return Reserva.objects.create(
+            cliente=cliente, chacara=self.chacara, status=status,
+            data_inicio=self.hoje + timedelta(days=inicio), data_fim=self.hoje + timedelta(days=fim))
+
+    def _navegador(self, username):
+        c = Client()
+        c.login(username=username, password='testpass123')
+        return c
+
+    # -- isolamento por dono ---------------------------------------------------
+
+    def test_outro_usuario_recebe_404(self):
+        for nome in ('avaliacao_detail', 'avaliacao_update', 'avaliacao_delete'):
+            with self.subTest(nome):
+                url = reverse(nome, args=[self.avaliacao.pk])
+                self.assertEqual(self.c_intruso.get(url).status_code, 404)
+                self.assertEqual(self.c_dono.get(url).status_code, 200)
+
+    def test_post_de_outro_usuario_nao_altera_nem_exclui(self):
+        self.c_intruso.post(reverse('avaliacao_update', args=[self.avaliacao.pk]), {'nota': 1, 'comentario': 'x'})
+        self.c_intruso.post(reverse('avaliacao_delete', args=[self.avaliacao.pk]))
+        self.avaliacao.refresh_from_db()
+        self.assertEqual(self.avaliacao.nota, 5)
+
+    def test_lista_mostra_so_as_do_dono(self):
+        alheia_reserva = self._reserva(self.intruso_cliente, -20, -18, Reserva.STATUS_CONFIRMADA)
+        alheia = Avaliacao.objects.create(usuario=self.intruso_user, reserva=alheia_reserva, nota=2)
+        response = self.c_dono.get(reverse('minhas_avaliacoes'))
+        self.assertEqual(list(response.context['avaliacoes']), [self.avaliacao])
+        response = self.c_intruso.get(reverse('minhas_avaliacoes'))
+        self.assertEqual(list(response.context['avaliacoes']), [alheia])
+
+    def test_anonimo_vai_para_o_login(self):
+        for url in (reverse('minhas_avaliacoes'), reverse('avaliacao_create'),
+                    reverse('avaliacao_detail', args=[self.avaliacao.pk])):
+            with self.subTest(url):
+                response = Client().get(url)
+                self.assertRedirects(response, f"{reverse('login')}?next={url}")
+
+    # -- criação ---------------------------------------------------------------
+
+    def test_cria_avaliacao_preenchendo_o_usuario_logado(self):
+        outra = self._reserva(self.cliente, -5, -3, Reserva.STATUS_CONFIRMADA)
+        response = self.c_dono.post(reverse('avaliacao_create'), {
+            'reserva': outra.pk, 'nota': 4, 'comentario': 'Muito bom', 'usuario': self.intruso_user.pk})
+        nova = Avaliacao.objects.get(reserva=outra)
+        self.assertRedirects(response, reverse('avaliacao_detail', args=[nova.pk]))
+        self.assertEqual(nova.usuario, self.dono)  # o "usuario" do POST é ignorado
+        self.assertEqual(ultima_mensagem(response), 'Avaliação enviada. Obrigado por contar como foi a sua estadia!')
+
+    def test_nao_avalia_reserva_de_outro_usuario(self):
+        alheia = self._reserva(self.intruso_cliente, -6, -4, Reserva.STATUS_CONFIRMADA)
+        response = self.c_dono.post(reverse('avaliacao_create'), {'reserva': alheia.pk, 'nota': 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('reserva', response.context['form'].errors)
+        self.assertFalse(Avaliacao.objects.filter(reserva=alheia).exists())
+
+    def test_so_oferece_reservas_elegiveis(self):
+        elegivel = self._reserva(self.cliente, -5, 0, Reserva.STATUS_CONFIRMADA)    # saiu hoje
+        futura = self._reserva(self.cliente, 5, 8, Reserva.STATUS_CONFIRMADA)       # ainda não aconteceu
+        pendente = self._reserva(self.cliente, -30, -28, Reserva.STATUS_PENDENTE)   # nunca confirmada
+        alheia = self._reserva(self.intruso_cliente, -40, -38, Reserva.STATUS_CONFIRMADA)
+        response = self.c_dono.get(reverse('avaliacao_create'), {'reserva': elegivel.pk})
+        opcoes = list(response.context['form'].fields['reserva'].queryset)
+        self.assertEqual(opcoes, [elegivel])  # self.concluida já foi avaliada
+        self.assertEqual(response.context['form'].initial['reserva'], elegivel.pk)
+        for reserva in (futura, pendente, alheia, self.concluida):
+            with self.subTest(reserva=reserva.pk):
+                response = self.c_dono.post(reverse('avaliacao_create'), {'reserva': reserva.pk, 'nota': 3})
+                self.assertIn('reserva', response.context['form'].errors)
+
+    def test_model_clean_barra_reserva_futura_e_alheia(self):
+        futura = self._reserva(self.cliente, 5, 8, Reserva.STATUS_CONFIRMADA)
+        with self.assertRaises(ValidationError):
+            Avaliacao(usuario=self.dono, reserva=futura, nota=4).full_clean()
+        alheia = self._reserva(self.intruso_cliente, -6, -4, Reserva.STATUS_CONFIRMADA)
+        with self.assertRaises(ValidationError):
+            Avaliacao(usuario=self.dono, reserva=alheia, nota=4).full_clean()
+        with self.assertRaises(ValidationError):
+            Avaliacao(usuario=self.intruso_user, reserva=alheia, nota=6).full_clean()
+
+    # -- edição e exclusão -------------------------------------------------------
+
+    def test_edita_e_exclui_a_propria(self):
+        response = self.c_dono.post(reverse('avaliacao_update', args=[self.avaliacao.pk]),
+                                    {'nota': 4, 'comentario': 'Mudei de ideia'})
+        self.assertEqual(ultima_mensagem(response), 'Avaliação atualizada.')
+        self.avaliacao.refresh_from_db()
+        self.assertEqual((self.avaliacao.nota, self.avaliacao.reserva), (4, self.concluida))
+
+        response = self.c_dono.post(reverse('avaliacao_delete', args=[self.avaliacao.pk]))
+        self.assertRedirects(response, reverse('minhas_avaliacoes'))
+        self.assertEqual(ultima_mensagem(response), 'Avaliação excluída.')
+        self.assertFalse(Avaliacao.objects.exists())
+
+    # -- integração com as outras telas -----------------------------------------
+
+    def test_link_avaliar_na_lista_de_reservas(self):
+        elegivel = self._reserva(self.cliente, -5, -2, Reserva.STATUS_CONFIRMADA)
+        futura = self._reserva(self.cliente, 5, 8, Reserva.STATUS_CONFIRMADA)
+        response = self.c_dono.get(reverse('minhas_reservas'))
+        self.assertContains(response, f'{reverse("avaliacao_create")}?reserva={elegivel.pk}')
+        self.assertNotContains(response, f'?reserva={futura.pk}')
+        self.assertContains(response, reverse('avaliacao_detail', args=[self.avaliacao.pk]))  # já avaliada
+
+    def test_menu_tem_minhas_avaliacoes_para_cliente(self):
+        self.assertContains(self.c_dono.get(reverse('index')), reverse('minhas_avaliacoes'))
+        self.assertNotContains(Client().get(reverse('index')), reverse('minhas_avaliacoes'))
+
+    def test_pagina_da_chacara_mostra_so_o_agregado(self):
+        outra = self._reserva(self.intruso_cliente, -30, -28, Reserva.STATUS_CONFIRMADA)
+        Avaliacao.objects.create(usuario=self.intruso_user, reserva=outra, nota=4, comentario='Comentário do intruso')
+        response = Client().get(reverse('chacara_unica'))
+        self.assertEqual(response.context['avaliacoes'], {'media': 4.5, 'total': 2})
+        self.assertContains(response, '4,5')
+        self.assertContains(response, '2 avaliações')
+        self.assertNotContains(response, 'comentário privado')
+        self.assertNotContains(response, 'Comentário do intruso')
+        self.assertNotContains(response, 'Dono')
+
+    def test_chacara_sem_avaliacoes(self):
+        Avaliacao.objects.all().delete()
+        self.assertContains(Client().get(reverse('chacara_unica')), 'Ainda sem avaliações')
+
+    def test_filtro_de_estrelas(self):
+        self.assertEqual(estrelas(4.5), ['bi-star-fill'] * 4 + ['bi-star-half'])
+        self.assertEqual(estrelas(3), ['bi-star-fill'] * 3 + ['bi-star'] * 2)
+        self.assertEqual(estrelas(None), ['bi-star'] * 5)
+
+
+class AcessoPorDonoReservaTest(TestCase):
+    """Classe 1 — Reserva: listar, ver, alterar e cancelar só as próprias."""
+
+    def setUp(self):
+        self.chacara = Chacara.objects.order_by('pk').first() or make_chacara()
+        self.dono = make_user(username='dono')
+        self.cliente = Cliente.objects.create(nome='Dono', telefone='11999990000', usuario=self.dono)
+        intruso = make_user(username='intruso')
+        Cliente.objects.create(nome='Intruso', telefone='11888887777', usuario=intruso)
+        inicio = timezone.localdate() + timedelta(days=10)
+        self.reserva = Reserva.objects.create(
+            cliente=self.cliente, chacara=self.chacara, data_inicio=inicio, data_fim=inicio + timedelta(days=2))
+        self.intruso = Client()
+        self.intruso.login(username='intruso', password='testpass123')
+
+    def test_outro_cliente_recebe_404_em_todas_as_telas_da_reserva(self):
+        for nome in ('minha_reserva_detail', 'minha_reserva_update', 'minha_reserva_delete', 'reserva_detail'):
+            with self.subTest(nome):
+                self.assertEqual(self.intruso.get(reverse(nome, args=[self.reserva.pk])).status_code, 404)
+
+    def test_post_de_outro_cliente_nao_altera_nem_cancela(self):
+        self.intruso.post(reverse('minha_reserva_update', args=[self.reserva.pk]), {
+            'data_inicio': self.reserva.data_inicio.isoformat(),
+            'data_fim': (self.reserva.data_fim + timedelta(days=5)).isoformat(), 'observacoes': 'invadido'})
+        self.intruso.post(reverse('minha_reserva_delete', args=[self.reserva.pk]))
+        self.reserva.refresh_from_db()
+        self.assertEqual(self.reserva.status, Reserva.STATUS_PENDENTE)
+        self.assertEqual(self.reserva.observacoes, '')
+
+    def test_lista_do_outro_cliente_nao_inclui_a_reserva(self):
+        response = self.intruso.get(reverse('minhas_reservas'))
+        self.assertNotIn(self.reserva, response.context['reservas'])
 
 
 # ---------------------------------------------------------------------------

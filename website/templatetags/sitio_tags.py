@@ -32,3 +32,25 @@ def telefone(valor):
     if len(digitos) == 10:
         return f'({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}'
     return valor
+
+
+@register.filter
+def estrelas(nota):
+    """Classes dos 5 ícones de estrela para uma nota de 0 a 5 (com meia estrela).
+
+    Ex.: 4.3 -> 4 cheias + 1 meia; uso:
+    {% for icone in nota|estrelas %}<i class="bi {{ icone }}"></i>{% endfor %}
+    """
+    try:
+        meias = round(float(nota or 0) * 2)
+    except (TypeError, ValueError):
+        meias = 0
+    icones = []
+    for posicao in range(1, 6):
+        if meias >= posicao * 2:
+            icones.append('bi-star-fill')
+        elif meias == posicao * 2 - 1:
+            icones.append('bi-star-half')
+        else:
+            icones.append('bi-star')
+    return icones

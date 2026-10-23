@@ -1,0 +1,32 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}Excluir Avaliação — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-danger text-white py-3">
+        <h4 class="mb-0 fw-display"><i class="bi bi-trash me-2"></i>Excluir Avaliação</h4>
+      </div>
+      <div class="card-body p-4">
+        <p class="mb-1">Tem certeza que deseja excluir a sua avaliação?</p>
+        <p class="text-secondary small mb-3">
+          {{ object.reserva.chacara.nome }} — estadia de {{ object.reserva.data_inicio|date:"d/m/Y" }}
+          a {{ object.reserva.data_fim|date:"d/m/Y" }} · nota {{ object.nota }}/5
+        </p>
+        <p class="text-danger small">Depois de excluída, você poderá avaliar esta estadia de novo.</p>
+        <form method="post" data-confirmar="Deseja realmente excluir esta avaliação?">
+          {% csrf_token %}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger px-4">
+              <i class="bi bi-trash me-1"></i>Confirmar Exclusão
+            </button>
+            <a href="{% url 'avaliacao_detail' object.pk %}" class="btn btn-outline-secondary px-4">Voltar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.utils import timezone
 
 
@@ -251,3 +252,68 @@ class UsoIA(models.Model):
     @property
     def custo_brl(self):
         return Decimal(self.custo_usd) * Decimal(str(settings.GEMINI_COTACAO_BRL))
+
+
+class Avaliacao(models.Model):
+    """Avaliação de uma estadia, feita pelo próprio cliente.
+
+    Regra de elegibilidade (``services.reservas_avaliaveis``): só a PRÓPRIA
+    reserva, CONFIRMADA e com a estadia já concluída (``data_fim <= hoje``).
+    Antes disso não há o que avaliar, e um pedido pendente/recusado nunca
+    virou estadia. Uma avaliação por reserva (OneToOne).
+    """
+
+    NOTA_MINIMA = 1
+    NOTA_MAXIMA = 5
+    NOTA_CHOICES = [
+        (1, '1 — Ruim'),
+        (2, '2 — Regular'),
+        (3, '3 — Boa'),
+        (4, '4 — Muito boa'),
+        (5, '5 — Excelente'),
+    ]
+
+    usuario = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='avaliacoes',
+        verbose_name='Usuário', help_text='Quem fez a avaliação (preenchido automaticamente).'
+    )
+    reserva = models.OneToOneField(
+        Reserva, on_delete=models.CASCADE, related_name='avaliacao',
+        verbose_name='Reserva', help_text='Estadia avaliada (confirmada e já concluída).'
+    )
+    nota = models.PositiveSmallIntegerField(
+        choices=NOTA_CHOICES,
+        validators=[MinValueValidator(NOTA_MINIMA), MaxValueValidator(NOTA_MAXIMA)],
+        verbose_name='Nota', help_text='De 1 (ruim) a 5 (excelente).'
+    )
+    comentario = models.TextField(
+        blank=True, max_length=1000,
+        verbose_name='Comentário', help_text='Opcional. Conte como foi a estadia (até 1000 caracteres).'
+    )
+    criado_em = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Criada em', help_text='Data e hora em que a avaliação foi enviada.'
+    )
+    atualizado_em = models.DateTimeField(
+        auto_now=True,
+        verbose_name='Atualizada em', help_text='Data e hora da última alteração.'
+    )
+
+    class Meta:
+        verbose_name = 'Avaliação'
+        verbose_name_plural = 'Avaliações'
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f"Avaliação {self.nota}/5 — reserva #{self.reserva_id}"
+
+    def clean(self):
+        # O usuário é preenchido pela view antes da validação (nunca vem do POST).
+        if not self.reserva_id or not self.usuario_id:
+            return
+        reserva = self.reserva
+        if reserva.cliente.usuario_id != self.usuario_id:
+            raise ValidationError({'reserva': 'Você só pode avaliar as suas próprias reservas.'})
+        if reserva.status != Reserva.STATUS_CONFIRMADA or reserva.data_fim > timezone.localdate():
+            raise ValidationError(
+                {'reserva': 'Só é possível avaliar uma reserva confirmada cuja estadia já terminou.'})

@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.views import View
 from django.views.generic import (
     CreateView, DeleteView, DetailView, FormView,
-    TemplateView, UpdateView,
+    ListView, TemplateView, UpdateView,
 )
 from django.views.generic.detail import SingleObjectMixin
 from django_filters.views import FilterView
@@ -29,10 +29,10 @@ from .filters import (
     ReservaConfirmadaFilter, ReservaPendenteFilter, UsoIAFilter,
 )
 from .forms import (
-    ClienteForm, DecisaoReservaForm, ReservaAdminForm,
-    ReservaClienteForm, SignupForm,
+    AvaliacaoForm, AvaliacaoUpdateForm, ClienteForm, DecisaoReservaForm,
+    ReservaAdminForm, ReservaClienteForm, SignupForm,
 )
-from .models import Administrador, Chacara, Cliente, Reserva, UsoIA
+from .models import Administrador, Avaliacao, Chacara, Cliente, Reserva, UsoIA
 from .services import ErroRegraNegocio, usuario_eh_admin
 
 
@@ -132,6 +132,12 @@ class ChacaraUnicaView(DetailView):
             raise Http404('Nenhuma chácara cadastrada.')
         return chacara
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Só média e quantidade: comentários e autores são de cada cliente.
+        ctx['avaliacoes'] = services.resumo_avaliacoes(self.object)
+        return ctx
+
 
 # ---------------------------------------------------------------------------
 # Cadastro / auth
@@ -208,11 +214,18 @@ class MinhasReservasListView(LoginRequiredMixin, FilterView):
         # Usuário sem perfil de cliente cai numa lista vazia.
         # select_related('chacara'): a tabela mostra chacara.nome; sem isto
         # seria 1 consulta à Chácara por linha.
+        # select_related('avaliacao'): o link "Avaliar"/"Ver avaliação" depende
+        # dela; sem isto seria 1 consulta por reserva confirmada.
         return (
             super().get_queryset()
             .filter(cliente__usuario=self.request.user)
-            .select_related('chacara')
+            .select_related('chacara', 'avaliacao')
         )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['hoje'] = timezone.localdate()
+        return ctx
 
 
 class ReservaDetailView(LoginRequiredMixin, DetailView):
@@ -519,6 +532,93 @@ class AdministradorCreate(AdminRequiredMixin, SuccessMessageMixin, CreateView):
         response = super().form_valid(form)
         services.garantir_grupo_admin(self.object.usuario)
         return response
+
+
+# ---------------------------------------------------------------------------
+# Avaliações — registros por usuário (CRUD restrito ao dono)
+# ---------------------------------------------------------------------------
+
+class AvaliacaoDoDonoMixin(LoginRequiredMixin):
+    """Fronteira de segurança: só as avaliações do usuário logado.
+
+    Avaliação de outro usuário responde 404 em detalhe, edição e exclusão.
+    """
+
+    def get_queryset(self):
+        return (
+            Avaliacao.objects
+            .filter(usuario=self.request.user)
+            .select_related('reserva__chacara')
+        )
+
+
+class MinhasAvaliacoesList(AvaliacaoDoDonoMixin, ListView):
+    model = Avaliacao
+    template_name = 'website/avaliacao_list.html'
+    context_object_name = 'avaliacoes'
+    paginate_by = 10
+    ordering = ['-criado_em']
+
+    def get_queryset(self):
+        return super().get_queryset().order_by(*self.ordering)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['tem_reserva_para_avaliar'] = services.reservas_avaliaveis(self.request.user).exists()
+        return ctx
+
+
+class AvaliacaoDetail(AvaliacaoDoDonoMixin, DetailView):
+    model = Avaliacao
+    template_name = 'website/avaliacao_detail.html'
+    context_object_name = 'avaliacao'
+
+
+class AvaliacaoCreate(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+    model = Avaliacao
+    form_class = AvaliacaoForm
+    template_name = 'website/avaliacao_form.html'
+    success_message = 'Avaliação enviada. Obrigado por contar como foi a sua estadia!'
+    extra_context = {'titulo': 'Avaliar Estadia', 'botao': 'Enviar Avaliação'}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['usuario'] = self.request.user
+        return kwargs
+
+    def get_initial(self):
+        # Link "Avaliar" da lista de reservas: ?reserva=<id> já vem selecionada
+        # (só se for uma reserva avaliável do próprio usuário).
+        initial = super().get_initial()
+        reserva_id = self.request.GET.get('reserva', '')
+        if reserva_id.isdigit() and services.reservas_avaliaveis(self.request.user).filter(pk=reserva_id).exists():
+            initial['reserva'] = int(reserva_id)
+        return initial
+
+    def form_valid(self, form):
+        form.instance.usuario = self.request.user  # nunca vem do POST
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('avaliacao_detail', args=[self.object.pk])
+
+
+class AvaliacaoUpdate(AvaliacaoDoDonoMixin, SuccessMessageMixin, UpdateView):
+    model = Avaliacao
+    form_class = AvaliacaoUpdateForm
+    template_name = 'website/avaliacao_form.html'
+    success_message = 'Avaliação atualizada.'
+    extra_context = {'titulo': 'Editar Avaliação', 'botao': 'Salvar Alterações'}
+
+    def get_success_url(self):
+        return reverse('avaliacao_detail', args=[self.object.pk])
+
+
+class AvaliacaoDelete(AvaliacaoDoDonoMixin, SuccessMessageMixin, DeleteView):
+    model = Avaliacao
+    template_name = 'website/avaliacao_confirm_delete.html'
+    success_url = reverse_lazy('minhas_avaliacoes')
+    success_message = 'Avaliação excluída.'
 
 
 # ---------------------------------------------------------------------------

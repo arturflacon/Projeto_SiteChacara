@@ -62,6 +62,16 @@
               <a href="{% url 'minha_reserva_delete' r.pk %}" class="btn btn-sm btn-outline-danger" title="Cancelar">
                 <i class="bi bi-x-circle"></i>
               </a>
+            {% elif r.status == 'CONFIRMADA' and r.data_fim <= hoje %}
+              {% if r.avaliacao %}
+                <a href="{% url 'avaliacao_detail' r.avaliacao.pk %}" class="btn btn-sm btn-outline-warning" title="Ver minha avaliação">
+                  <i class="bi bi-star-fill"></i>
+                </a>
+              {% else %}
+                <a href="{% url 'avaliacao_create' %}?reserva={{ r.pk }}" class="btn btn-sm btn-warning" title="Avaliar esta estadia">
+                  <i class="bi bi-star me-1"></i>Avaliar
+                </a>
+              {% endif %}
             {% endif %}
           </td>
         </tr>

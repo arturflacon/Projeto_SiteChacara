@@ -23,6 +23,8 @@ from .views import (
     AdministradorCreate,
     # Cliente
     ClienteUpdate,
+    # Avaliações (registros por usuário)
+    MinhasAvaliacoesList, AvaliacaoDetail, AvaliacaoCreate, AvaliacaoUpdate, AvaliacaoDelete,
     # IA (Gemini)
     ChatbotMensagemView, ChatbotLimparView, ReanalisarPedidoView, UsoIAListView,
 )
@@ -50,6 +52,13 @@ urlpatterns = [
     path('reservas/minhas/<int:pk>/', MinhaReservaDetailView.as_view(), name='minha_reserva_detail'),
     path('reservas/minhas/<int:pk>/editar/', MinhaReservaUpdateView.as_view(), name='minha_reserva_update'),
     path('reservas/minhas/<int:pk>/cancelar/', MinhaReservaDeleteView.as_view(), name='minha_reserva_delete'),
+
+    # --- Avaliações (cliente — só as próprias) ---
+    path('avaliacoes/', MinhasAvaliacoesList.as_view(), name='minhas_avaliacoes'),
+    path('avaliacoes/nova/', AvaliacaoCreate.as_view(), name='avaliacao_create'),
+    path('avaliacoes/<int:pk>/', AvaliacaoDetail.as_view(), name='avaliacao_detail'),
+    path('avaliacoes/<int:pk>/editar/', AvaliacaoUpdate.as_view(), name='avaliacao_update'),
+    path('avaliacoes/<int:pk>/excluir/', AvaliacaoDelete.as_view(), name='avaliacao_delete'),
 
     # --- Reservas (admin) ---
     path('reservas/pendentes/', PedidosPendentesListView.as_view(), name='pedidos_pendentes'),
