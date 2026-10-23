@@ -13,6 +13,8 @@ from django.utils import timezone
 from ia.models import RequisicaoIA
 from ia.services import ErroIA, chamar_ia
 
+from .formatos import moeda
+
 logger = logging.getLogger(__name__)
 
 # Roda durante o envio do pedido: não pode segurar o cliente esperando.
@@ -43,10 +45,6 @@ ANALISE_SEM_OBSERVACOES = {
     'pontos_de_atencao': ['Pedido sem descrição: confirme com o cliente o tipo de evento e o número de pessoas.'],
     'nivel_atencao': 'médio',
 }
-
-
-def _moeda(valor):
-    return f'R$ {valor:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
 def validar_analise(dados):
@@ -96,7 +94,7 @@ def descrever_pedido(reserva):
     """Texto enviado ao modelo: período, valor e observações. Sem nome/telefone."""
     diarias = (reserva.data_fim - reserva.data_inicio).days
     chacara = reserva.chacara
-    valor = _moeda(reserva.valor_total) if reserva.valor_total else 'não calculado'
+    valor = moeda(reserva.valor_total) if reserva.valor_total else 'não calculado'
     return (
         f'Pedido #{reserva.pk}\n'
         f'Período: {reserva.data_inicio:%d/%m/%Y} a {reserva.data_fim:%d/%m/%Y} ({diarias} diária(s))\n'
