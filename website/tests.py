@@ -298,47 +298,66 @@ class FiltroListagensTest(TestCase):
         self.assertNotIn('cliente', response.context['filter'].form.fields)
 
 
-class DataTablesListagensTest(TestCase):
-    """As tabelas de listagem seguem a skill datatables-listagens."""
+class PluginsJQueryTest(TestCase):
+    """jQuery Mask, Bootbox e DataTables carregados no modelo.html e
+    inicializados em static/js/site.js."""
 
-    TABELA = 'class="table table-striped table-hover align-middle table-datatable"'
+    SCRIPTS_EM_ORDEM = [
+        'ajax/libs/jquery/3.7.1/jquery.min.js',
+        'ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js',
+        'ajax/libs/bootbox.js/6.0.0/bootbox.min.js',
+        'ajax/libs/datatables.net/2.1.8/dataTables.min.js',
+        'ajax/libs/datatables.net-bs5/2.1.8/dataTables.bootstrap5.min.js',
+        'ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js',
+        '/static/js/site.js',
+    ]
 
     def setUp(self):
-        self.chacara = make_chacara()
+        self.chacara = Chacara.objects.order_by('pk').first() or make_chacara()
         self.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=make_user())
         make_admin_user()
+        inicio = timezone.localdate() + timedelta(days=10)
+        self.reserva = Reserva.objects.create(
+            cliente=self.cliente, chacara=self.chacara, data_inicio=inicio, data_fim=inicio + timedelta(days=3))
+        self.cli = Client()
+        self.cli.login(username='clienteuser', password='testpass123')
+        self.admin = Client()
+        self.admin.login(username='adminuser', password='testpass123')
 
-    def _reserva(self, status=Reserva.STATUS_PENDENTE):
-        # 3 diárias × R$ 500,00 = R$ 1.500,00
-        return Reserva.objects.create(
-            cliente=self.cliente,
-            chacara=self.chacara,
-            data_inicio=date(2026, 12, 3),
-            data_fim=date(2026, 12, 6),
-            status=status,
-        )
+    def test_modelo_carrega_jquery_plugins_bootstrap_e_site_js_nessa_ordem(self):
+        html = Client().get(reverse('index')).content.decode()
+        posicoes = [html.index(script) for script in self.SCRIPTS_EM_ORDEM]
+        self.assertEqual(posicoes, sorted(posicoes))
+        self.assertIn('cdnjs.cloudflare.com/ajax/libs/datatables.net-bs5/2.1.8/dataTables.bootstrap5.min.css', html)
 
-    def test_moeda_e_data_ordenam_pelo_data_sort(self):
-        self._reserva()
-        for username, url_name in [('clienteuser', 'minhas_reservas'), ('adminuser', 'pedidos_pendentes')]:
-            with self.subTest(url_name):
-                c = Client()
-                c.login(username=username, password='testpass123')
-                response = c.get(reverse(url_name))
-                self.assertContains(response, self.TABELA)
-                self.assertContains(response, '<td data-sort="2026-12-03">03/12/2026</td>')
-                self.assertContains(response, 'data-sort="1500.00"')
-                self.assertContains(response, 'R$ 1.500,00')
-                self.assertContains(
-                    response,
-                    '<th class="text-end" data-orderable="false" data-searchable="false">Ações</th>',
-                )
+    def test_mascara_de_telefone_no_cadastro_e_em_meus_dados(self):
+        self.assertContains(Client().get(reverse('signup')), 'class="mascara-telefone')
+        response = self.cli.get(reverse('cliente_update', args=[self.cliente.pk]))
+        self.assertContains(response, 'class="mascara-telefone')
 
-    def test_disponibilidade_ordena_datas_pelo_data_sort(self):
-        self._reserva(status=Reserva.STATUS_CONFIRMADA)
-        response = Client().get(reverse('calendario_reservas'))
-        self.assertContains(response, self.TABELA)
-        self.assertContains(response, '<td data-sort="2026-12-06">06/12/2026</td>')
+    def test_bootbox_nos_formularios_de_decisao_exclusao_e_cancelamento(self):
+        response = self.admin.get(reverse('pedidos_pendentes'))
+        self.assertContains(response, 'data-confirmar="Aprovar o pedido de João Silva', count=1)
+        self.assertContains(response, 'data-confirmar="Recusar o pedido de João Silva', count=1)
+        for url in (reverse('reserva_aprovar', args=[self.reserva.pk]),
+                    reverse('reserva_recusar', args=[self.reserva.pk]),
+                    reverse('reserva_delete', args=[self.reserva.pk])):
+            with self.subTest(url):
+                self.assertContains(self.admin.get(url), 'data-confirmar="')
+        self.assertContains(self.cli.get(reverse('minha_reserva_delete', args=[self.reserva.pk])), 'data-confirmar="')
+
+    def test_listas_paginadas_no_servidor_nao_usam_datatables(self):
+        self.reserva.status = Reserva.STATUS_CONFIRMADA
+        self.reserva.save()
+        paginas = [
+            (self.cli, 'minhas_reservas'), (self.admin, 'pedidos_pendentes'),
+            (self.admin, 'reservas_todas'), (Client(), 'calendario_reservas'),
+        ]
+        for navegador, nome in paginas:
+            with self.subTest(nome):
+                response = navegador.get(reverse(nome))
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, 'table-datatable')
 
 
 # ---------------------------------------------------------------------------

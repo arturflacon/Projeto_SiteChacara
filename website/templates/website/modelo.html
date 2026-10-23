@@ -8,6 +8,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Sítio de Lurdes{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%231B6B7B'/%3E%3C/svg%3E" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,6 +16,7 @@
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs5/2.1.8/dataTables.bootstrap5.min.css" />
   <link rel="stylesheet" href="{% static "css/estilo.css" %}">
 
   {% block extra_css %}{% endblock %}
@@ -256,9 +258,18 @@
   </div>
   {{ chat_historico|json_script:"chat-historico" }}
 
-  <!-- Bibliotecas globais: jQuery antes de tudo que depende dele -->
+  <!-- Bibliotecas (cdnjs, versões fixas). Ordem: jQuery -> plugins jQuery -> Bootstrap -> site.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <!-- Plugin 1: jQuery Mask Plugin (máscara de telefone) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+  <!-- Plugin 2: Bootbox.js (confirmações em modal do Bootstrap) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootbox.js/6.0.0/bootbox.min.js"></script>
+  <!-- Plugin 3: DataTables (tabelas sem paginação no servidor) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net/2.1.8/dataTables.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs5/2.1.8/dataTables.bootstrap5.min.js"></script>
+  <!-- Bootstrap depois do jQuery: assim ele registra $.fn.modal, que o Bootbox usa -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+  <script src="{% static "js/site.js" %}"></script>
   <script src="{% static "js/chatbot.js" %}"></script>
   {% block extra_js %}{% endblock %}
 </body>
