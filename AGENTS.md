@@ -50,6 +50,8 @@ naes2026/              settings, urls raiz, wsgi
 website/               domínio principal: Chácara, Cliente, Reserva, Avaliação
   services.py          REGRAS DE NEGÓCIO (usadas pelas views e pelo bot)
   analise_pedido.py    análise do pedido pela IA (apoio à administradora)
+  backends.py          login que já traz os perfis Cliente/Administrador (menos queries)
+  formatos.py          moeda e período em português (IA e bot)
   filters.py           FilterSets (django-filter)
   templatetags/        url_params (paginação com filtros), sitio_tags (telefone, estrelas)
   templates/website/   modelo.html (base), _paginacao.html, form-filter.html…
@@ -63,7 +65,10 @@ assistente/            assistente virtual (/assistente/): histórico, contexto, 
   services.py          janela de histórico (JANELA_HISTORICO = 5) e perguntar()
   formatacao.py        Markdown -> HTML sanitizado (nh3); filtro {{ texto|markdown_seguro }}
 telegram_bot/          bot do Telegram via webhook (/telegram/webhook/)
-  api.py               chamadas HTTP à API do Telegram (requests + timeout)
+  api.py               chamadas HTTP à API do Telegram (requests + timeout, erros sem o token)
+  bot.py               comandos, botões inline, vínculo por código, limites por remetente
+  views.py             webhook (segredo no cabeçalho), Conectar Telegram, log de mensagens
+  management/commands/ configurar_webhook, info_webhook, remover_webhook
 static/                css/estilo.css (paleta petróleo), js/site.js, js/assistente.js
 docs/                  requisitos.md, otimizacoes.md, deploy.md
 .claude/skills/        skills dos agentes (ver seção 10)
@@ -87,6 +92,11 @@ python manage.py test               # suíte completa, sem internet
 python manage.py test website.tests.ServicesTest   # uma classe só
 
 python manage.py collectstatic --noinput   # gera static_gcloud/ (deploy)
+
+# Telegram (com TELEGRAM_BOT_TOKEN e TELEGRAM_WEBHOOK_SECRET no .env)
+python manage.py configurar_webhook --url https://<domínio>/telegram/webhook/
+python manage.py info_webhook
+python manage.py remover_webhook
 ```
 
 Sem a venv ativada, use `.\.venv\Scripts\python.exe manage.py ...`.
@@ -137,6 +147,8 @@ Sem a venv ativada, use `.\.venv\Scripts\python.exe manage.py ...`.
 | `TELEGRAM_BOT_TOKEN` | token do bot (BotFather) |
 | `TELEGRAM_WEBHOOK_SECRET` | segredo conferido no cabeçalho do webhook |
 | `TELEGRAM_BOT_USERNAME` | nome do bot sem `@` (link de vinculação) |
+| `SECURE_HSTS_SECONDS` | opcional; HSTS em produção (padrão 3600) |
+| `GEMINI_USAR_VERTEX`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | opcionais; Gemini via Vertex AI com a identidade do App Engine, sem API Key |
 
 Local: arquivo `.env` (carregado pelo `python-dotenv`). Produção:
 `env_variables` do `app.yaml`. Modelo: `.env.example`.

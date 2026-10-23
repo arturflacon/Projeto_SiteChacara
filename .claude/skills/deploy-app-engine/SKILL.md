@@ -42,7 +42,7 @@ O `.gcloudignore` **não** pode ignorar `static_gcloud/` nem `app.yaml`.
 Rodado da máquina local, apontando para o Neon só nesta sessão do terminal:
 
 ```powershell
-$env:DATABASE_URL = '<url do Neon — copie do painel, não cole em arquivo>'
+$env:DATABASE_URL = Read-Host -Prompt 'Cole a DATABASE_URL do Neon' -MaskInput
 python manage.py migrate
 python manage.py showmigrations ia assistente telegram_bot website
 Remove-Item Env:DATABASE_URL
@@ -58,9 +58,11 @@ gcloud app logs tail -s default     # acompanhe erros na primeira subida
 ### 6. Telegram
 
 ```powershell
-# com TELEGRAM_BOT_TOKEN e TELEGRAM_WEBHOOK_SECRET no ambiente local
+$env:TELEGRAM_BOT_TOKEN = Read-Host -Prompt 'Token do bot' -MaskInput
+$env:TELEGRAM_WEBHOOK_SECRET = Read-Host -Prompt 'Segredo do webhook' -MaskInput
 python manage.py configurar_webhook --url https://<projeto>.appspot.com/telegram/webhook/
 python manage.py info_webhook       # confira url, pending_update_count e last_error_message
+Remove-Item Env:TELEGRAM_BOT_TOKEN, Env:TELEGRAM_WEBHOOK_SECRET
 ```
 
 ### 7. Smoke test (no navegador, em produção)
