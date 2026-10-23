@@ -5,7 +5,8 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from .models import Chacara, Cliente, Reserva
+from .models import Cliente, Reserva
+from .services import chacara_principal
 
 
 def limpar_telefone(valor):
@@ -104,7 +105,7 @@ class ReservaClienteForm(forms.ModelForm):
                     {'data_fim': 'A data de saída deve ser posterior à data de chegada (mínimo de 1 diária).'}
                 )
 
-            chacara = Chacara.objects.first()
+            chacara = chacara_principal()
             if chacara:
                 conflito = Reserva.objects.filter(
                     chacara=chacara,

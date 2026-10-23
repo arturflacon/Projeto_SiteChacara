@@ -4,13 +4,13 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.exceptions import ValidationError
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from . import ia
+from . import ia, services
 from .forms import ClienteForm, ReservaClienteForm
 from .models import Administrador, Chacara, Cliente, Reserva, UsoIA
 from .templatetags.sitio_tags import telefone
@@ -652,6 +652,159 @@ class CalendarioEventosTest(TestCase):
         c.login(username='adminuser', password='testpass123')
         response = c.get(reverse('calendario_reservas'))
         self.assertEqual(response.context['eventos'][0]['title'], 'Reservado — João Silva')
+
+
+# ---------------------------------------------------------------------------
+# website/services.py — regras de negócio compartilhadas (site e bot)
+# ---------------------------------------------------------------------------
+
+class ServicesTest(TestCase):
+    def setUp(self):
+        # A migration 0003 já cria a chácara do sistema; os testes usam ela.
+        self.chacara = Chacara.objects.order_by('pk').first() or make_chacara()
+        self.chacara.preco_diaria = Decimal('500.00')
+        self.chacara.save()
+        self.user = make_user()
+        self.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=self.user)
+        self.outro_user = make_user(username='maria')
+        self.outro = Cliente.objects.create(nome='Maria Souza', telefone='11888887777', usuario=self.outro_user)
+        self.admin_user = make_admin_user()
+        self.hoje = timezone.localdate()
+
+    def _reserva(self, cliente=None, inicio=10, fim=13, status=Reserva.STATUS_PENDENTE):
+        return Reserva.objects.create(
+            cliente=cliente or self.cliente, chacara=self.chacara,
+            data_inicio=self.hoje + timedelta(days=inicio),
+            data_fim=self.hoje + timedelta(days=fim), status=status,
+        )
+
+    # -- consultas -----------------------------------------------------------
+
+    def test_chacara_principal_e_a_primeira_cadastrada(self):
+        make_chacara(nome='Outra')
+        self.assertEqual(services.chacara_principal(), self.chacara)
+
+    def test_chacara_principal_sem_cadastro(self):
+        Chacara.objects.all().delete()
+        self.assertIsNone(services.chacara_principal())
+
+    def test_usuario_eh_admin(self):
+        do_grupo = make_user(username='dogrupo')
+        do_grupo.groups.add(Group.objects.get_or_create(name='Administradores')[0])
+        super_user = User.objects.create_superuser('raiz', 'raiz@exemplo.com', 'testpass123')
+        self.assertTrue(services.usuario_eh_admin(self.admin_user))   # perfil Administrador
+        self.assertTrue(services.usuario_eh_admin(do_grupo))          # grupo
+        self.assertTrue(services.usuario_eh_admin(super_user))        # superuser
+        self.assertFalse(services.usuario_eh_admin(self.user))
+        self.assertFalse(services.usuario_eh_admin(AnonymousUser()))
+        self.assertFalse(services.usuario_eh_admin(None))
+
+    def test_admin_required_mixin_usa_a_mesma_regra(self):
+        do_grupo = make_user(username='dogrupo')
+        do_grupo.groups.add(Group.objects.get_or_create(name='Administradores')[0])
+        c = Client()
+        c.login(username='dogrupo', password='testpass123')
+        self.assertEqual(c.get(reverse('pedidos_pendentes')).status_code, 200)
+
+    def test_datas_confirmadas_futuras_so_datas_e_so_futuras(self):
+        futura = self._reserva(inicio=5, fim=7, status=Reserva.STATUS_CONFIRMADA)
+        self._reserva(inicio=-10, fim=-8, status=Reserva.STATUS_CONFIRMADA)  # já passou
+        self._reserva(inicio=20, fim=22)                                       # pendente
+        self.assertEqual(services.datas_confirmadas_futuras(), [(futura.data_inicio, futura.data_fim)])
+
+    def test_reservas_do_usuario_e_pedidos_pendentes(self):
+        minha = self._reserva()
+        alheia = self._reserva(cliente=self.outro, inicio=20, fim=22)
+        self._reserva(inicio=30, fim=32, status=Reserva.STATUS_CONFIRMADA)
+        self.assertNotIn(alheia, services.reservas_do_usuario(self.user))
+        self.assertIn(minha, services.reservas_do_usuario(self.user))
+        self.assertEqual(list(services.pedidos_pendentes()), [minha, alheia])
+        with self.assertNumQueries(1):  # select_related: cliente e chácara no mesmo SELECT
+            [(r.cliente.nome, r.chacara.nome) for r in services.pedidos_pendentes()]
+
+    # -- criar_pedido_reserva -----------------------------------------------
+
+    def test_criar_pedido_reserva(self):
+        reserva = services.criar_pedido_reserva(
+            self.cliente, self.hoje + timedelta(days=3), self.hoje + timedelta(days=5), 'Aniversário')
+        self.assertEqual(reserva.status, Reserva.STATUS_PENDENTE)
+        self.assertEqual(reserva.chacara, self.chacara)
+        self.assertEqual(reserva.valor_total, Decimal('1000.00'))
+        self.assertEqual(reserva.historico.get().alterado_por, self.user)
+
+    def test_criar_pedido_valida_datas_e_conflito(self):
+        self._reserva(cliente=self.outro, inicio=10, fim=15, status=Reserva.STATUS_CONFIRMADA)
+        casos = [
+            (5, 5, 'mínimo de 1 diária'),
+            (6, 4, 'mínimo de 1 diária'),
+            (-1, 2, 'passado'),
+            (12, 14, 'Já existe uma reserva confirmada'),
+        ]
+        for inicio, fim, mensagem in casos:
+            with self.subTest(inicio=inicio, fim=fim):
+                with self.assertRaisesMessage(services.ErroRegraNegocio, mensagem):
+                    services.criar_pedido_reserva(
+                        self.cliente, self.hoje + timedelta(days=inicio), self.hoje + timedelta(days=fim))
+        # O dia de saída da confirmada fica livre para uma nova entrada.
+        services.criar_pedido_reserva(self.cliente, self.hoje + timedelta(days=15), self.hoje + timedelta(days=16))
+        self.assertEqual(Reserva.objects.filter(cliente=self.cliente).count(), 1)
+
+    # -- aprovar / recusar ---------------------------------------------------
+
+    def test_aprovar_reserva(self):
+        pedido = self._reserva(inicio=10, fim=13)
+        conflitante = self._reserva(cliente=self.outro, inicio=12, fim=15)
+        reserva, recusados = services.aprovar_reserva(pedido.pk, self.admin_user, 'Sinal pago.')
+        self.assertEqual(reserva.status, Reserva.STATUS_CONFIRMADA)
+        self.assertIsNotNone(reserva.data_decisao)
+        self.assertEqual(recusados, 1)
+        conflitante.refresh_from_db()
+        self.assertEqual(conflitante.status, Reserva.STATUS_RECUSADA)
+        self.assertEqual(reserva.historico.get().observacao, 'Sinal pago.')
+
+    def test_aprovar_exige_admin_pendente_e_sem_conflito(self):
+        pedido = self._reserva(inicio=10, fim=13)
+        with self.assertRaisesMessage(services.ErroRegraNegocio, 'Apenas a administração'):
+            services.aprovar_reserva(pedido.pk, self.user)
+        with self.assertRaisesMessage(services.ErroRegraNegocio, 'não encontrado'):
+            services.aprovar_reserva(999999, self.admin_user)
+
+        self._reserva(cliente=self.outro, inicio=11, fim=12, status=Reserva.STATUS_CONFIRMADA)
+        with self.assertRaisesMessage(services.ErroRegraNegocio, 'já existe uma reserva confirmada'):
+            services.aprovar_reserva(pedido.pk, self.admin_user)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, Reserva.STATUS_PENDENTE)
+        self.assertIsNone(pedido.data_decisao)
+
+        recusado = self._reserva(inicio=40, fim=42, status=Reserva.STATUS_RECUSADA)
+        with self.assertRaisesMessage(services.ErroRegraNegocio, 'não está mais pendente'):
+            services.aprovar_reserva(recusado.pk, self.admin_user)
+
+    def test_recusar_reserva(self):
+        pedido = self._reserva()
+        with self.assertRaises(services.ErroRegraNegocio):
+            services.recusar_reserva(pedido.pk, self.user)
+        reserva = services.recusar_reserva(pedido.pk, self.admin_user, 'Data indisponível.')
+        self.assertEqual(reserva.status, Reserva.STATUS_RECUSADA)
+        self.assertIsNotNone(reserva.data_decisao)
+        self.assertEqual(reserva.historico.get().observacao, 'Data indisponível.')
+        with self.assertRaisesMessage(services.ErroRegraNegocio, 'não está mais pendente'):
+            services.recusar_reserva(pedido.pk, self.admin_user)
+
+    # -- cancelar_pedido_cliente ---------------------------------------------
+
+    def test_cancelar_pedido_cliente(self):
+        pedido = self._reserva()
+        with self.assertRaisesMessage(services.ErroRegraNegocio, 'não encontrado'):
+            services.cancelar_pedido_cliente(pedido.pk, self.outro_user)  # não é o dono
+        reserva = services.cancelar_pedido_cliente(pedido.pk, self.user)
+        self.assertEqual(reserva.status, Reserva.STATUS_CANCELADA)
+        self.assertEqual(reserva.historico.get().alterado_por, self.user)
+
+    def test_cancelar_so_pendente(self):
+        confirmada = self._reserva(status=Reserva.STATUS_CONFIRMADA)
+        with self.assertRaisesMessage(services.ErroRegraNegocio, 'Só é possível cancelar pedidos pendentes'):
+            services.cancelar_pedido_cliente(confirmada.pk, self.user)
 
 
 # ---------------------------------------------------------------------------

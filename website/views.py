@@ -6,12 +6,11 @@ from braces.views import GroupRequiredMixin
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Avg, Count, Sum
-from django.http import JsonResponse
+from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -24,6 +23,7 @@ from django.views.generic.detail import SingleObjectMixin
 from django_filters.views import FilterView
 
 from . import ia
+from . import services
 from .filters import (
     MinhasReservasFilter, ReservaAdminFilter,
     ReservaConfirmadaFilter, ReservaPendenteFilter, UsoIAFilter,
@@ -32,54 +32,8 @@ from .forms import (
     ClienteForm, DecisaoReservaForm, ReservaAdminForm,
     ReservaClienteForm, SignupForm,
 )
-from .models import Administrador, Chacara, Cliente, HistoricoReserva, Reserva, UsoIA
-
-
-GRUPO_ADMIN = 'Administradores'
-
-
-def eh_admin(user):
-    """Mesma regra do AdminRequiredMixin: grupo, superuser ou perfil Administrador."""
-    return (
-        user.is_superuser
-        or hasattr(user, 'administrador')
-        or user.groups.filter(name=GRUPO_ADMIN).exists()
-    )
-
-
-# ---------------------------------------------------------------------------
-# Movimento: histórico de status e recusa automática
-# ---------------------------------------------------------------------------
-
-def registrar_historico(reserva, status_anterior, usuario, observacao=''):
-    """Grava em HistoricoReserva a mudança de status que acabou de acontecer."""
-    return HistoricoReserva.objects.create(
-        reserva=reserva,
-        status_anterior=status_anterior,
-        status_novo=reserva.status,
-        alterado_por=usuario,
-        observacao=observacao,
-    )
-
-
-def recusar_pendentes_sobrepostas(reserva, usuario):
-    """Recusa os pedidos PENDENTES da mesma chácara que conflitam com uma
-    reserva recém-confirmada. Devolve quantos foram recusados."""
-    agora = timezone.now()
-    # select_related: o save() de cada reserva lê chacara.preco_diaria;
-    # sem isto seria 1 consulta extra à chácara por pedido recusado.
-    pendentes = reserva.sobrepostas(Reserva.STATUS_PENDENTE).select_related('chacara')
-    total = 0
-    for pedido in pendentes:
-        pedido.status = Reserva.STATUS_RECUSADA
-        pedido.data_decisao = agora
-        pedido.save(update_fields=['status', 'data_decisao'])
-        registrar_historico(
-            pedido, Reserva.STATUS_PENDENTE, usuario,
-            'Recusado automaticamente: período confirmado para outro pedido.',
-        )
-        total += 1
-    return total
+from .models import Administrador, Chacara, Cliente, Reserva, UsoIA
+from .services import ErroRegraNegocio, usuario_eh_admin
 
 
 # ---------------------------------------------------------------------------
@@ -87,21 +41,18 @@ def recusar_pendentes_sobrepostas(reserva, usuario):
 # ---------------------------------------------------------------------------
 
 class AdminRequiredMixin(GroupRequiredMixin):
-    """Acesso restrito ao grupo 'Administradores' (django-braces).
+    """Acesso restrito à administração (django-braces).
 
-    Além dos membros do grupo, superusers e usuários com perfil
-    ``Administrador`` mantêm acesso — isso preserva o comportamento
-    esperado mesmo para perfis criados fora do fluxo padrão.
+    A regra de quem é admin (grupo 'Administradores', superuser ou perfil
+    ``Administrador``) fica em ``services.usuario_eh_admin``, a mesma usada
+    pelo bot do Telegram.
     """
 
-    group_required = GRUPO_ADMIN
+    group_required = services.GRUPO_ADMIN
     raise_exception = False  # sem permissão -> redireciona ao login
 
     def check_membership(self, groups):
-        u = self.request.user
-        if u.is_superuser or hasattr(u, 'administrador'):
-            return True
-        return super().check_membership(groups)
+        return usuario_eh_admin(self.request.user)
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +64,7 @@ class IndexView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['chacara'] = Chacara.objects.first()
+        ctx['chacara'] = services.chacara_principal()
         return ctx
 
 
@@ -122,7 +73,7 @@ class SobreView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['chacara'] = Chacara.objects.first()
+        ctx['chacara'] = services.chacara_principal()
         return ctx
 
 
@@ -145,7 +96,7 @@ class CalendarioReservasView(FilterView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        mostrar_cliente = self.request.user.is_authenticated and eh_admin(self.request.user)
+        mostrar_cliente = usuario_eh_admin(self.request.user)
         # Eventos do FullCalendar: todas as confirmadas a partir de hoje, sem
         # paginação. O "end" do FullCalendar é exclusivo, igual à regra do
         # sistema (o dia de saída fica livre para uma nova entrada).
@@ -176,7 +127,10 @@ class ChacaraUnicaView(DetailView):
     context_object_name = 'chacara'
 
     def get_object(self, queryset=None):
-        return get_object_or_404(Chacara)
+        chacara = services.chacara_principal()
+        if chacara is None:
+            raise Http404('Nenhuma chácara cadastrada.')
+        return chacara
 
 
 # ---------------------------------------------------------------------------
@@ -216,26 +170,25 @@ class ReservaCreate(LoginRequiredMixin, SuccessMessageMixin, CreateView):
                 'Apenas clientes fazem pedidos de reserva. '
                 'Administradores gerenciam os pedidos recebidos.',
             )
-            return redirect('pedidos_pendentes' if eh_admin(request.user) else 'index')
+            return redirect('pedidos_pendentes' if usuario_eh_admin(request.user) else 'index')
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
-        chacara = Chacara.objects.first()
-        if not chacara:
-            form.add_error(None, 'Nenhuma chácara cadastrada no sistema.')
+        try:
+            self.object = services.criar_pedido_reserva(
+                cliente=self.request.user.cliente,
+                data_inicio=form.cleaned_data['data_inicio'],
+                data_fim=form.cleaned_data['data_fim'],
+                observacoes=form.cleaned_data['observacoes'],
+            )
+        except ErroRegraNegocio as erro:
+            form.add_error(None, str(erro))
             return self.form_invalid(form)
-        # Preenche o que o cliente não informa ANTES de salvar.
-        form.instance.cliente = self.request.user.cliente
-        form.instance.chacara = chacara
-        form.instance.status = Reserva.STATUS_PENDENTE
-        with transaction.atomic():
-            response = super().form_valid(form)
-            # Depois do super(), self.object é a reserva já salva.
-            registrar_historico(self.object, '', self.request.user, 'Pedido criado pelo cliente.')
-        # Fora da transação: o pedido já está salvo. Se a IA falhar ou estiver
-        # desligada, analisar_pedido só devolve None e o fluxo segue.
+        messages.success(self.request, self.get_success_message(form.cleaned_data))
+        # O pedido já está salvo. Se a IA falhar ou estiver desligada,
+        # analisar_pedido só devolve None e o fluxo segue.
         ia.analisar_pedido(self.object, usuario=self.request.user)
-        return response
+        return HttpResponseRedirect(self.get_success_url())
 
 
 class MinhasReservasListView(LoginRequiredMixin, FilterView):
@@ -278,7 +231,7 @@ class ReservaDetailView(LoginRequiredMixin, DetailView):
             .prefetch_related('historico__alterado_por')
         )
         u = self.request.user
-        if eh_admin(u):
+        if usuario_eh_admin(u):
             return qs
         if hasattr(u, 'cliente'):
             return qs.filter(cliente=u.cliente)
@@ -326,34 +279,39 @@ class MinhaReservaUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView
         return response
 
 
-class MinhaReservaDeleteView(LoginRequiredMixin, DeleteView):
+class MinhaReservaDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
     """Cliente cancela o próprio pedido enquanto está PENDENTE.
 
     O registro NÃO é apagado: o status vira CANCELADA e a mudança fica no
-    histórico.
+    histórico (services.cancelar_pedido_cliente).
     """
     model = Reserva
     template_name = 'website/reserva_confirm_cancel.html'
     success_url = reverse_lazy('minhas_reservas')
+    success_message = 'Pedido de %(inicio)s a %(fim)s cancelado.'
     extra_context = {'titulo': 'Cancelar Meu Pedido'}
 
     def get_queryset(self):
-        # select_related('chacara'): o template mostra chacara.nome e o
-        # save() lê chacara.preco_diaria.
+        # select_related('chacara'): o template mostra chacara.nome.
         return Reserva.objects.select_related('chacara').filter(
             cliente__usuario=self.request.user, status=Reserva.STATUS_PENDENTE)
+
+    def get_success_message(self, cleaned_data):
+        return self.success_message % {
+            'inicio': f'{self.object.data_inicio:%d/%m/%Y}',
+            'fim': f'{self.object.data_fim:%d/%m/%Y}',
+        }
 
     def form_valid(self, form):
         # Django 4+: o DeleteView chama form_valid() no POST. Sobrescrevemos
         # para cancelar em vez de excluir.
-        reserva = self.object
-        with transaction.atomic():
-            anterior = reserva.status
-            reserva.status = Reserva.STATUS_CANCELADA
-            reserva.save(update_fields=['status'])
-            registrar_historico(reserva, anterior, self.request.user, 'Cancelado pelo cliente.')
-        messages.success(self.request, 'Pedido cancelado.')
-        return redirect(self.get_success_url())
+        try:
+            services.cancelar_pedido_cliente(self.object.pk, self.request.user)
+        except ErroRegraNegocio as erro:
+            messages.error(self.request, str(erro))
+        else:
+            messages.success(self.request, self.get_success_message({}))
+        return HttpResponseRedirect(self.get_success_url())
 
 
 # ---------------------------------------------------------------------------
@@ -421,38 +379,12 @@ class AprovarReservaView(DecisaoReservaView):
     extra_context = {'titulo': 'Aprovar Pedido', 'botao': 'Confirmar Aprovação', 'aprovar': True}
 
     def form_valid(self, form):
-        reserva = self.object
-        usuario = self.request.user
-        with transaction.atomic():
-            # Trava a chácara: duas aprovações simultâneas para a mesma
-            # chácara passam por aqui uma de cada vez (no PostgreSQL).
-            Chacara.objects.select_for_update().get(pk=reserva.chacara_id)
-            reserva.refresh_from_db()
-            if reserva.status != Reserva.STATUS_PENDENTE:
-                messages.error(self.request, f'O pedido #{reserva.pk} não está mais pendente.')
-                return redirect(self.get_success_url())
-
-            # 1. Revalida: o clean() do model não roda no save().
-            if reserva.sobrepostas(Reserva.STATUS_CONFIRMADA).exists():
-                messages.error(
-                    self.request,
-                    f'Não foi possível aprovar o pedido de {reserva.cliente.nome}: '
-                    'já existe uma reserva confirmada nesse período.',
-                )
-                return redirect(self.get_success_url())
-
-            # 2. Confirma.
-            anterior = reserva.status
-            reserva.status = Reserva.STATUS_CONFIRMADA
-            reserva.data_decisao = timezone.now()
-            reserva.save()
-
-            # 3. Registra no histórico (outra classe do models).
-            registrar_historico(reserva, anterior, usuario, form.cleaned_data['observacao'])
-
-            # 4. Recusa os outros pedidos pendentes que conflitam.
-            recusados = recusar_pendentes_sobrepostas(reserva, usuario)
-
+        try:
+            reserva, recusados = services.aprovar_reserva(
+                self.object.pk, self.request.user, form.cleaned_data['observacao'])
+        except ErroRegraNegocio as erro:
+            messages.error(self.request, str(erro))
+            return redirect(self.get_success_url())
         texto = f'Pedido de {reserva.cliente.nome} aprovado.'
         if recusados:
             texto += f' {recusados} pedido(s) pendente(s) no mesmo período foram recusados automaticamente.'
@@ -464,14 +396,13 @@ class RecusarReservaView(DecisaoReservaView):
     extra_context = {'titulo': 'Recusar Pedido', 'botao': 'Confirmar Recusa', 'aprovar': False}
 
     def form_valid(self, form):
-        reserva = self.object
-        with transaction.atomic():
-            anterior = reserva.status
-            reserva.status = Reserva.STATUS_RECUSADA
-            reserva.data_decisao = timezone.now()
-            reserva.save(update_fields=['status', 'data_decisao'])
-            registrar_historico(reserva, anterior, self.request.user, form.cleaned_data['observacao'])
-        messages.success(self.request, f'Pedido de {reserva.cliente.nome} recusado.')
+        try:
+            reserva = services.recusar_reserva(
+                self.object.pk, self.request.user, form.cleaned_data['observacao'])
+        except ErroRegraNegocio as erro:
+            messages.error(self.request, str(erro))
+        else:
+            messages.success(self.request, f'Pedido de {reserva.cliente.nome} recusado.')
         return redirect(self.get_success_url())
 
 
@@ -499,12 +430,12 @@ class ReservaUpdateView(AdminRequiredMixin, SuccessMessageMixin, UpdateView):
                 form.instance.data_decisao = timezone.now()
             response = super().form_valid(form)
             if mudou:
-                registrar_historico(
+                services.registrar_historico(
                     self.object, anterior, self.request.user,
                     'Status alterado na edição da reserva.',
                 )
                 if novo == Reserva.STATUS_CONFIRMADA:
-                    recusar_pendentes_sobrepostas(self.object, self.request.user)
+                    services.recusar_pendentes_sobrepostas(self.object, self.request.user)
         return response
 
 
@@ -564,8 +495,7 @@ class AdministradorCreate(AdminRequiredMixin, SuccessMessageMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        grupo, _ = Group.objects.get_or_create(name=GRUPO_ADMIN)
-        self.object.usuario.groups.add(grupo)
+        services.garantir_grupo_admin(self.object.usuario)
         return response
 
 
