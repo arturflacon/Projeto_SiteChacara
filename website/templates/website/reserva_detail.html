@@ -11,7 +11,7 @@
       <h2 class="fw-display mb-0">
         <i class="bi bi-receipt me-2 text-primary"></i>Detalhes da Reserva
       </h2>
-      {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+      {% if eh_admin %}
       {# Admin volta para a lista de pedidos: pendentes se ainda falta decidir, senão todas #}
       <a href="{% if reserva.status == 'PENDENTE' %}{% url 'pedidos_pendentes' %}{% else %}{% url 'reservas_todas' %}{% endif %}" class="btn btn-outline-secondary btn-sm">
       {% else %}
@@ -109,7 +109,7 @@
           {% endif %}
         </div>
 
-        {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+        {% if eh_admin %}
         <hr>
         <div class="d-flex gap-2 flex-wrap">
           {% if reserva.status == 'PENDENTE' %}
@@ -142,7 +142,7 @@
       </div>
     </div>
 
-    {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+    {% if eh_admin %}
     <!-- ANÁLISE DA IA (só para a administração) -->
     <div class="card border-0 shadow-sm mt-4">
       <div class="card-body p-4">

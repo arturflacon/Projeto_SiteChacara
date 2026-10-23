@@ -69,6 +69,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'website.context_processors.perfil',
                 'website.context_processors.chatbot',
             ],
         },
@@ -94,6 +95,14 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
+
+# O primeiro carrega o usuário já com os perfis Cliente/Administrador
+# (2 consultas a menos por página). O ModelBackend continua na lista para que
+# as sessões abertas antes desta mudança não sejam derrubadas.
+AUTHENTICATION_BACKENDS = [
+    'website.backends.BackendComPerfil',
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
 if TESTANDO:

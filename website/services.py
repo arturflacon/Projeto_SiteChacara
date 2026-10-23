@@ -32,14 +32,23 @@ def chacara_principal():
 
 
 def usuario_eh_admin(user):
-    """Admin = superuser, perfil ``Administrador`` ou membro do grupo ``Administradores``."""
+    """Admin = superuser, perfil ``Administrador`` ou membro do grupo ``Administradores``.
+
+    O resultado fica guardado no próprio objeto ``user`` (que vive uma
+    requisição): o mixin de acesso, a view e a navbar perguntam a mesma coisa
+    e só a primeira pergunta vai ao banco.
+    """
     if user is None or not getattr(user, 'is_authenticated', False):
         return False
-    # hasattr: sem perfil, o acesso levanta RelatedObjectDoesNotExist, que
-    # também é um AttributeError.
-    if user.is_superuser or hasattr(user, 'administrador'):
-        return True
-    return user.groups.filter(name=GRUPO_ADMIN).exists()
+    if not hasattr(user, '_eh_admin'):
+        # hasattr: sem perfil, o acesso levanta RelatedObjectDoesNotExist, que
+        # também é um AttributeError.
+        user._eh_admin = (
+            user.is_superuser
+            or hasattr(user, 'administrador')
+            or user.groups.filter(name=GRUPO_ADMIN).exists()
+        )
+    return user._eh_admin
 
 
 def datas_confirmadas_futuras():

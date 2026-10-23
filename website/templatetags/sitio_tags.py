@@ -10,20 +10,6 @@ register = template.Library()
 
 
 @register.filter
-def pertence(user, nome_grupo):
-    """True se o usuário está no grupo. Ex.: user|pertence:"Administradores".
-
-    Os nomes dos grupos ficam guardados no próprio objeto user, para que
-    vários usos na mesma página façam uma única consulta ao banco.
-    """
-    if not getattr(user, 'is_authenticated', False):
-        return False
-    if not hasattr(user, '_grupos_cache'):
-        user._grupos_cache = set(user.groups.values_list('name', flat=True))
-    return nome_grupo in user._grupos_cache
-
-
-@register.filter
 def telefone(valor):
     """Formata só dígitos como telefone: 46999998888 -> (46) 99999-8888."""
     digitos = re.sub(r'\D', '', str(valor or ''))

@@ -152,7 +152,7 @@ class SignupView(SuccessMessageMixin, FormView):
 
     def form_valid(self, form):
         user = form.save()
-        login(self.request, user)
+        login(self.request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
         return super().form_valid(form)
 
 

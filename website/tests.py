@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from . import ia, services
 from .forms import ClienteForm, ReservaClienteForm
-from .models import Administrador, Avaliacao, Chacara, Cliente, Reserva, UsoIA
+from .models import Administrador, Avaliacao, Chacara, Cliente, HistoricoReserva, Reserva, UsoIA
 from .templatetags.sitio_tags import estrelas, telefone
 
 
@@ -1177,6 +1177,80 @@ class AcessoPorDonoReservaTest(TestCase):
     def test_lista_do_outro_cliente_nao_inclui_a_reserva(self):
         response = self.intruso.get(reverse('minhas_reservas'))
         self.assertNotIn(self.reserva, response.context['reservas'])
+
+
+# ---------------------------------------------------------------------------
+# Otimização de consultas (docs/otimizacoes.md): o número de queries de cada
+# tela não pode crescer com a quantidade de registros (N+1).
+# ---------------------------------------------------------------------------
+
+class NumeroDeConsultasTest(TestCase):
+    """Base de toda página logada: sessão (1) + usuário já com cliente e
+    administrador (1, BackendComPerfil). O cliente ainda paga 1 consulta aos
+    grupos (usuario_eh_admin, uma vez por requisição); o admin com perfil
+    Administrador não. Se um teste destes falhar, alguém tirou um
+    select_related/prefetch_related ou criou uma consulta por linha."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.chacara = Chacara.objects.order_by('pk').first() or make_chacara()
+        hoje = timezone.localdate()
+        cls.user = make_user()
+        cls.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=cls.user)
+        outro = Cliente.objects.create(nome='Maria Souza', telefone='11888887777', usuario=make_user(username='maria'))
+        cls.admin_user = make_admin_user()
+        for i in range(12):  # mais que uma página (paginate_by = 10)
+            inicio = hoje - timedelta(days=300 + i * 5)
+            passada = Reserva.objects.create(cliente=cls.cliente, chacara=cls.chacara, status=Reserva.STATUS_CONFIRMADA,
+                                             data_inicio=inicio, data_fim=inicio + timedelta(days=2))
+            Avaliacao.objects.create(usuario=cls.user, reserva=passada, nota=4)
+            inicio = hoje + timedelta(days=30 + i * 5)
+            Reserva.objects.create(cliente=outro, chacara=cls.chacara,
+                                   data_inicio=inicio, data_fim=inicio + timedelta(days=2))
+            Reserva.objects.create(cliente=cls.cliente, chacara=cls.chacara, status=Reserva.STATUS_CONFIRMADA,
+                                   data_inicio=inicio + timedelta(days=2), data_fim=inicio + timedelta(days=4))
+        cls.pendente = Reserva.objects.filter(status=Reserva.STATUS_PENDENTE).first()
+        for _ in range(3):
+            HistoricoReserva.objects.create(reserva=cls.pendente, status_novo=Reserva.STATUS_PENDENTE,
+                                            alterado_por=cls.admin_user)
+
+    def setUp(self):
+        self.cli = Client()
+        self.cli.force_login(self.user)
+        self.admin = Client()
+        self.admin.force_login(self.admin_user)
+
+    def _confere(self, navegador, url, consultas):
+        with self.assertNumQueries(consultas):
+            response = navegador.get(url)
+        self.assertEqual(response.status_code, 200)
+        return response
+
+    def test_listas_do_cliente(self):
+        # base (2) + grupos (1) + contagem da paginação + página (com chácara e avaliação no JOIN)
+        self._confere(self.cli, reverse('minhas_reservas'), 5)
+        # ... + "ainda tem reserva para avaliar?"
+        self._confere(self.cli, reverse('minhas_avaliacoes'), 6)
+
+    def test_listas_do_admin(self):
+        # base (2) + contagem + página (cliente e chácara no JOIN)
+        self._confere(self.admin, reverse('pedidos_pendentes'), 4)
+        self._confere(self.admin, reverse('reservas_todas'), 4)
+
+    def test_disponibilidade_publica(self):
+        # visitante: contagem + página + eventos do calendário
+        self._confere(Client(), reverse('calendario_reservas'), 3)
+
+    def test_detalhe_da_reserva_com_historico(self):
+        # base (2) + reserva/cliente/chácara (JOIN) + histórico + quem alterou (prefetch)
+        self._confere(self.admin, reverse('reserva_detail', args=[self.pendente.pk]), 5)
+
+    def test_perfil_vem_junto_com_o_usuario(self):
+        response = self.cli.get(reverse('index'))
+        user = response.wsgi_request.user
+        with self.assertNumQueries(0):  # já vieram no SELECT do usuário
+            self.assertEqual(user.cliente, self.cliente)
+            self.assertFalse(hasattr(user, 'administrador'))
 
 
 # ---------------------------------------------------------------------------

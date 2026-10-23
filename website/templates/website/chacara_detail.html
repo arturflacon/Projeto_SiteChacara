@@ -1,5 +1,4 @@
 {% extends "website/modelo.html" %}
-{% load sitio_tags %}
 
 {% block title %}{{ chacara.nome }} — Sítio de Lurdes{% endblock %}
 
@@ -83,7 +82,7 @@
           <i class="bi bi-calendar3 me-1"></i>Ver disponibilidade
         </a>
         {% include 'website/botao-pedido.html' with classe="btn btn-primary w-100" texto="Fazer pedido" %}
-        {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+        {% if eh_admin %}
           <hr>
           <a href="{% url 'chacara_update' chacara.pk %}" class="btn btn-outline-secondary w-100">
             <i class="bi bi-pencil me-1"></i>Editar informações

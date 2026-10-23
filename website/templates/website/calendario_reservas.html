@@ -54,7 +54,7 @@
         <tr>
           <th>Entrada</th>
           <th>Saída</th>
-          {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+          {% if eh_admin %}
           <th>Cliente</th>
           <th>Telefone</th>
           {% endif %}
@@ -65,7 +65,7 @@
         <tr>
           <td>{{ r.data_inicio|date:"d/m/Y" }}</td>
           <td>{{ r.data_fim|date:"d/m/Y" }}</td>
-          {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+          {% if eh_admin %}
           <td><strong>{{ r.cliente.nome }}</strong></td>
           <td class="text-nowrap">
             <a href="tel:{{ r.cliente.telefone }}" class="text-decoration-none">
