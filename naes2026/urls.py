@@ -6,6 +6,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('ia/', include('ia.urls')),
     path('assistente/', include('assistente.urls')),
+    path('telegram/', include('telegram_bot.urls')),
     path('', include('website.urls')),
 ]
 

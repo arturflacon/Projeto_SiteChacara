@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'website.apps.WebsiteConfig',
     'ia.apps.IaConfig',
     'assistente.apps.AssistenteConfig',
+    'telegram_bot.apps.TelegramBotConfig',
 
     'crispy_forms',
     'crispy_bootstrap5',
@@ -161,3 +162,23 @@ if TESTANDO:
     # Nenhum teste pode chamar a API de verdade, mesmo que o .env tenha a chave.
     GEMINI_API_KEY = ''
     GEMINI_USAR_VERTEX = False
+
+# ---------------------------------------------------------------------------
+# Bot do Telegram (webhook). Ver app "telegram_bot" e docs/deploy.md.
+# ---------------------------------------------------------------------------
+# Token e segredo SÓ no ambiente; nunca no banco, em templates, logs ou URLs.
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_WEBHOOK_SECRET = os.environ.get('TELEGRAM_WEBHOOK_SECRET', '')
+TELEGRAM_BOT_USERNAME = os.environ.get('TELEGRAM_BOT_USERNAME', '').lstrip('@')
+TELEGRAM_TIMEOUT_SEGUNDOS = 10
+# Limites por remetente, contados no banco (o App Engine pode ter várias
+# instâncias: um contador em memória não serviria).
+TELEGRAM_LIMITE_POR_MINUTO = 20
+TELEGRAM_LIMITE_POR_DIA = 200
+TELEGRAM_TENTATIVAS_VINCULO_POR_HORA = 5
+TELEGRAM_CODIGO_VALIDADE_MINUTOS = 15
+
+if TESTANDO:
+    # Nenhum teste pode falar com o Telegram de verdade.
+    TELEGRAM_BOT_TOKEN = ''
+    TELEGRAM_WEBHOOK_SECRET = ''

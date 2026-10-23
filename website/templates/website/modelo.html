@@ -109,6 +109,11 @@
                   <i class="bi bi-sliders me-2"></i>Configuração da IA
                 </a></li>
                 <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header">Telegram</h6></li>
+                <li><a class="dropdown-item" href="{% url "telegram_bot:mensagens" %}">
+                  <i class="bi bi-telegram me-2"></i>Mensagens do Bot
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="{% url "administrador_create" %}">
                   <i class="bi bi-person-badge me-2"></i>Novo Administrador
                 </a></li>
@@ -134,6 +139,9 @@
                 {% endif %}
                 <li><a class="dropdown-item" href="{% url "ia:meu_consumo" %}">
                   <i class="bi bi-speedometer2 me-2"></i>Meu consumo de IA
+                </a></li>
+                <li><a class="dropdown-item" href="{% url "telegram_bot:conectar" %}">
+                  <i class="bi bi-telegram me-2"></i>Conectar Telegram
                 </a></li>
                 <li><a class="dropdown-item" href="{% url "password_change" %}">
                   <i class="bi bi-key me-2"></i>Alterar senha
