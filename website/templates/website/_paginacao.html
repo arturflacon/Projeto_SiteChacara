@@ -1,0 +1,38 @@
+{% load url_params %}
+{% comment %}
+  Paginação de TODAS as listas: anterior, números próximos e próxima.
+  url_com_parametros copia o request.GET e só troca o "page": os filtros da
+  busca continuam na URL. Incluir logo depois da tabela da lista.
+{% endcomment %}
+{% if is_paginated %}
+<nav aria-label="Paginação" class="d-flex flex-column flex-md-row align-items-center justify-content-between gap-2 mt-3">
+  <small class="text-secondary">
+    Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+    · {{ page_obj.paginator.count }} registro{{ page_obj.paginator.count|pluralize }}
+  </small>
+  <ul class="pagination pagination-sm flex-wrap mb-0">
+    {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="{% url_com_parametros page=page_obj.previous_page_number %}" rel="prev">Anterior</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+    {% endif %}
+
+    {% paginas_proximas page_obj as paginas %}
+    {% for numero in paginas %}
+      {% if numero == page_obj.paginator.ELLIPSIS %}
+        <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+      {% elif numero == page_obj.number %}
+        <li class="page-item active" aria-current="page"><span class="page-link">{{ numero }}</span></li>
+      {% else %}
+        <li class="page-item"><a class="page-link" href="{% url_com_parametros page=numero %}">{{ numero }}</a></li>
+      {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="{% url_com_parametros page=page_obj.next_page_number %}" rel="next">Próxima</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Próxima</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

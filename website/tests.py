@@ -1,13 +1,17 @@
 import json
 from datetime import date, timedelta
 from decimal import Decimal
+from html import unescape
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs
 
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
-from django.test import Client, TestCase, override_settings
+from django.core.paginator import Paginator
+from django.template import Context, Template
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -275,12 +279,12 @@ class FiltroListagensTest(TestCase):
 
         response = c.get(url, {'cliente': 'silva'})
         self.assertContains(response, 'Página 1 de 2')
-        self.assertContains(response, 'href="?cliente=silva&page=2">Próxima</a>')
-        self.assertNotContains(response, '>Anterior</a>')
+        self.assertContains(response, 'href="?cliente=silva&amp;page=2" rel="next">Próxima</a>')
+        self.assertContains(response, '<span class="page-link">Anterior</span>')  # desabilitado
 
         response = c.get(url, {'cliente': 'silva', 'page': 2})
-        self.assertContains(response, 'href="?cliente=silva&page=1">Anterior</a>')
-        self.assertNotContains(response, '>Próxima</a>')
+        self.assertContains(response, 'href="?cliente=silva&amp;page=1" rel="prev">Anterior</a>')
+        self.assertContains(response, '<span class="page-link">Próxima</span>')  # desabilitado
         self.assertEqual([r.cliente for r in response.context['reservas']], [self.cliente])
 
     def test_limpar_volta_para_a_lista_sem_parametros(self):
@@ -554,11 +558,72 @@ class FiltrosTerceiroTrimestreTest(TestCase):
 
         response = c.get(url, filtros)
         self.assertContains(response, 'Página 1 de 2')
-        self.assertContains(response, 'href="?cliente__nome=silva&status=PENDENTE&page=2">Próxima</a>')
+        self.assertContains(response, 'href="?cliente__nome=silva&amp;status=PENDENTE&amp;page=2" rel="next">Próxima</a>')
 
         response = c.get(url, {**filtros, 'page': 2})
-        self.assertContains(response, 'href="?cliente__nome=silva&status=PENDENTE&page=1">Anterior</a>')
+        self.assertContains(response, 'href="?cliente__nome=silva&amp;status=PENDENTE&amp;page=1" rel="prev">Anterior</a>')
         self.assertEqual(len(response.context['reservas']), 1)
+
+
+class UrlComParametrosTagTest(TestCase):
+    """Templatetag própria website/templatetags/url_params.py."""
+
+    def _render(self, query, trecho):
+        request = RequestFactory().get('/lista/', query)
+        return Template('{% load url_params %}' + trecho).render(Context({'request': request}))
+
+    def _query(self, html):
+        self.assertTrue(html.startswith('?'), html)
+        return parse_qs(unescape(html)[1:], keep_blank_values=True)
+
+    def test_troca_a_pagina_e_preserva_todos_os_filtros(self):
+        html = self._render(
+            {'status': 'PENDENTE', 'cliente__nome': 'João Silva', 'data_inicio__gte': '', 'page': '1'},
+            '{% url_com_parametros page=3 %}')
+        self.assertEqual(self._query(html), {
+            'status': ['PENDENTE'], 'cliente__nome': ['João Silva'],
+            'data_inicio__gte': [''], 'page': ['3'],
+        })
+
+    def test_insere_a_pagina_quando_nao_existe(self):
+        html = self._render({'status': 'CONFIRMADA'}, '{% url_com_parametros page=2 %}')
+        self.assertEqual(self._query(html), {'status': ['CONFIRMADA'], 'page': ['2']})
+
+    def test_none_remove_o_parametro(self):
+        html = self._render({'status': 'PENDENTE', 'page': '4'}, '{% url_com_parametros page=None %}')
+        self.assertEqual(self._query(html), {'status': ['PENDENTE']})
+
+    def test_preserva_parametro_com_varios_valores(self):
+        html = self._render({'status': ['PENDENTE', 'CONFIRMADA']}, '{% url_com_parametros page=2 %}')
+        self.assertEqual(self._query(html)['status'], ['PENDENTE', 'CONFIRMADA'])
+
+    def test_valor_malicioso_sai_codificado(self):
+        html = self._render({'cliente__nome': '"><script>alert(1)</script>'}, '{% url_com_parametros page=2 %}')
+        self.assertNotIn('<script>', html)
+        self.assertNotIn('"', html)
+        self.assertEqual(self._query(html)['cliente__nome'], ['"><script>alert(1)</script>'])
+
+    def test_paginas_proximas_com_reticencias(self):
+        paginator = Paginator(list(range(200)), 10)  # 20 páginas
+        html = Template(
+            '{% load url_params %}{% paginas_proximas page_obj as p %}{{ p|join:"," }}'
+        ).render(Context({'page_obj': paginator.page(7)}))
+        self.assertEqual(html, '1,…,5,6,7,8,9,…,20')
+
+    def test_partial_usa_a_tag_nos_numeros(self):
+        cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=make_user())
+        chacara = Chacara.objects.order_by('pk').first() or make_chacara()
+        hoje = timezone.localdate()
+        for dias in range(25):
+            inicio = hoje + timedelta(days=dias * 3 + 1)
+            Reserva.objects.create(cliente=cliente, chacara=chacara,
+                                   data_inicio=inicio, data_fim=inicio + timedelta(days=1))
+        c = Client()
+        c.login(username='clienteuser', password='testpass123')
+        response = c.get(reverse('minhas_reservas'), {'status': 'PENDENTE', 'page': 2})
+        self.assertContains(response, '<li class="page-item active" aria-current="page"><span class="page-link">2</span></li>')
+        self.assertContains(response, 'href="?status=PENDENTE&amp;page=3">3</a>')
+        self.assertContains(response, 'href="?status=PENDENTE&amp;page=1">1</a>')
 
 
 class TelefoneTest(TestCase):
