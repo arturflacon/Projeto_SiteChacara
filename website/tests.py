@@ -649,6 +649,23 @@ class UrlComParametrosTagTest(TestCase):
         self.assertContains(response, 'href="?status=PENDENTE&amp;page=1">1</a>')
 
 
+class AlterarSenhaTest(TestCase):
+    """O admin do Django também tem registration/password_change_form.html e,
+    por vir antes no INSTALLED_APPS, tomava o lugar da tela do site."""
+
+    def test_usa_a_tela_do_site(self):
+        user = make_user()
+        c = Client()
+        c.force_login(user)
+        response = c.get(reverse('password_change'))
+        self.assertTemplateUsed(response, 'website/senha_alterar.html')
+        self.assertContains(response, '<title>Alterar Senha — Sítio de Lurdes</title>', html=True)
+        response = c.post(reverse('password_change'), {
+            'old_password': 'testpass123', 'new_password1': 'NovaSenha!2026', 'new_password2': 'NovaSenha!2026'},
+            follow=True)
+        self.assertTemplateUsed(response, 'website/senha_alterada.html')
+
+
 class TelefoneTest(TestCase):
     """Máscara (00) 00000-0000 no navegador; só dígitos no banco."""
 
