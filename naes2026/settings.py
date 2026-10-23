@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import sys
 from django.contrib.messages import constants as messages
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -11,9 +12,15 @@ load_dotenv(BASE_DIR / '.env')
 # True durante "manage.py test" (desliga Debug Toolbar e a chave do Gemini).
 TESTANDO = 'test' in sys.argv
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-only-key-change-in-production')
+CHAVE_DESENVOLVIMENTO = 'django-insecure-dev-only-key-change-in-production'
+SECRET_KEY = os.environ.get('SECRET_KEY', CHAVE_DESENVOLVIMENTO)
 
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+if not DEBUG and SECRET_KEY == CHAVE_DESENVOLVIMENTO:
+    # A chave de desenvolvimento está no código (é pública): em produção ela
+    # permitiria forjar sessões e tokens. Melhor não subir do que subir assim.
+    raise ImproperlyConfigured('Defina a variável de ambiente SECRET_KEY (obrigatória com DEBUG=False).')
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
