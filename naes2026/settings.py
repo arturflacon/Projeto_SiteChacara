@@ -42,6 +42,7 @@ INSTALLED_APPS = [
 
     'website.apps.WebsiteConfig',
     'ia.apps.IaConfig',
+    'assistente.apps.AssistenteConfig',
 
     'crispy_forms',
     'crispy_bootstrap5',

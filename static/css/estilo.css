@@ -79,6 +79,13 @@
     .btn-primary, .bg-primary, .badge.bg-primary { background-color: var(--cp-primary) !important; border-color: var(--cp-primary) !important; }
     .btn-primary:hover                            { background-color: var(--petrol-dark) !important; border-color: var(--petrol-dark) !important; }
 
+    /* Navbar: itens numa linha só. Entre 1200 e 1399px (navbar aberta, mas
+       estreita) os ícones somem para caber; no celular e em telas largas voltam. */
+    .navbar-petrol .navbar-nav .nav-link { white-space: nowrap; }
+    @media (min-width: 1200px) and (max-width: 1399.98px) {
+      .navbar-petrol .navbar-nav > .nav-item > .nav-link > .bi { display: none; }
+    }
+
     /* Paginação (Django e DataTables) na paleta petróleo */
     .pagination {
       --bs-pagination-color: var(--petrol);
@@ -341,6 +348,8 @@
       background: var(--surface);
       display: flex;
       flex-direction: column;
+      height: 60vh;
+      min-height: 320px;
     }
     .chat-balao {
       max-width: 85%;
@@ -364,7 +373,15 @@
       color: var(--text-body);
       border: 1px solid var(--border-color);
       border-bottom-left-radius: .25rem;
+      white-space: normal;          /* a resposta já vem em HTML (Markdown sanitizado) */
     }
+    .chat-model p,
+    .chat-model ul,
+    .chat-model ol { margin-bottom: .5rem; }
+    .chat-model > :last-child { margin-bottom: 0; }
+    .chat-model ul,
+    .chat-model ol { padding-left: 1.25rem; }
+    .chat-model a { color: var(--petrol-dark); }
     .chat-erro {
       align-self: flex-start;
       background: rgba(var(--cp-danger-rgb), .08);

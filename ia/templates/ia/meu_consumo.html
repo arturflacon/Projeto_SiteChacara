@@ -54,7 +54,10 @@
         </table>
       </div>
     {% else %}
-      <div class="alert alert-info small"><i class="bi bi-info-circle me-1"></i>Você ainda não usou a IA neste site.</div>
+      <div class="alert alert-info small">
+        <i class="bi bi-info-circle me-1"></i>Você ainda não usou a IA neste site.
+        <a href="{% url 'assistente:conversa' %}">Fazer uma pergunta ao assistente</a>
+      </div>
     {% endif %}
   </div>
 </div>

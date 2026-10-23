@@ -36,7 +36,7 @@ a navbar ainda fazia +1 consulta para `user.cliente`, +1 para
 | Excluir reserva (admin) | 5 | 3 | `select_related('cliente', 'chacara')` + perfil |
 | Aprovar pedido (confirmação) | 5 | 3 | `select_related('cliente', 'chacara')` + perfil |
 
-### Telas do app `ia` (Fase 9)
+### Telas dos apps `ia` e `assistente` (Fases 9 e 10)
 
 Para as telas novas, a coluna "antes" é a implementação direta — chamando
 `consumo_do_mes()`, `cota_do_usuario()` etc. por linha, sem `select_related` —
@@ -47,6 +47,7 @@ medida com os mesmos dados.
 | Requisições da IA (20 por página) | 25 (5 + 1 por linha) | 5 | `select_related('usuario')` na lista; totais do filtro num único `aggregate` |
 | IA por usuário (18 usuários) | 94 (4 + 5 por usuário) | 4 | uma consulta com `annotate`: consumo do mês (`Sum` com `filter=`), habilitada e cota efetiva (`Coalesce` com o perfil e a cota padrão) + `select_related('cliente', 'administrador')`; configuração lida uma vez (`cached_property`) |
 | Meu consumo de IA | 9 | 7 | perfil e configuração lidos uma vez e repassados para `cota_do_usuario`/`usuario_habilitado`/`ia_disponivel` |
+| Assistente (histórico com 60 mensagens) | 5 | 5 | as 50 últimas mensagens numa consulta (`order_by` invertido + fatia); a janela enviada à IA é outra consulta com `[:4]` — nada por mensagem (`assistente.tests.ConsultasAssistenteTest`) |
 
 Nenhuma tela do `website` crescia com o volume no momento da medição (as listas
 já tinham `select_related` desde o 2º trimestre); o ganho desta fase foi o

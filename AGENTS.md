@@ -51,14 +51,17 @@ website/               domínio principal: Chácara, Cliente, Reserva, Avaliaç�
   services.py          REGRAS DE NEGÓCIO (usadas pelas views e pelo bot)
   analise_pedido.py    análise do pedido pela IA (apoio à administradora)
   filters.py           FilterSets (django-filter)
-  templatetags/        url_params (paginação com filtros), sitio_tags, markdown_seguro
+  templatetags/        url_params (paginação com filtros), sitio_tags (telefone, estrelas)
   templates/website/   modelo.html (base), _paginacao.html, form-filter.html…
 ia/                    ÚNICA porta de entrada para a IA
   services.py          chamar_ia, consumo_do_mes, cota_do_usuario, testar_conexao
   provedores/gemini.py único arquivo que importa o SDK google-genai
   models.py            ConfiguracaoIA (singleton), PerfilIAUsuario, RequisicaoIA (auditoria)
 assistente/            assistente virtual (/assistente/): histórico, contexto, instruções
-  contexto_projeto.md  descrição do site enviada à IA
+  contexto_projeto.md  descrição do site enviada à IA (+ dados atuais em contexto.py)
+  instrucoes.py        instruções de sistema (limites do assistente)
+  services.py          janela de histórico (JANELA_HISTORICO = 5) e perguntar()
+  formatacao.py        Markdown -> HTML sanitizado (nh3); filtro {{ texto|markdown_seguro }}
 telegram_bot/          bot do Telegram via webhook (/telegram/webhook/)
   api.py               chamadas HTTP à API do Telegram (requests + timeout)
 static/                css/estilo.css (paleta petróleo), js/site.js, js/assistente.js
