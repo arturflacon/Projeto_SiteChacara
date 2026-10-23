@@ -310,6 +310,8 @@
     .bg-surface-alt { background-color: var(--surface-alt) !important; }
     .fw-display { font-family: var(--font-display); font-weight: 700; }
     .border-white-10 { border-color: rgba(255,255,255,.1) !important; }
+    /* O Bootstrap só tem .text-white-50; esta é a versão mais legível sobre fundo escuro */
+    .text-white-75 { color: rgba(255,255,255,.75) !important; }
     .bg-petrol { background-color: var(--petrol) !important; }
     .bg-petrol-darker { background-color: var(--petrol-darker) !important; }
     .bg-petrol-subtle { background-color: var(--petrol-subtle) !important; }
