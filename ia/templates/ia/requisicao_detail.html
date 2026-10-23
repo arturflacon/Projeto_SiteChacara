@@ -1,0 +1,54 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}Requisição #{{ requisicao.pk }} — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2 class="fw-display mb-0"><i class="bi bi-cpu me-2 text-primary"></i>Requisição #{{ requisicao.pk }}</h2>
+      <a href="{% url 'ia:requisicoes' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Voltar
+      </a>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body p-4">
+        <div class="row g-3 small">
+          <div class="col-sm-4"><span class="text-secondary d-block">Data</span><strong>{{ requisicao.criado_em|date:"d/m/Y H:i:s" }}</strong></div>
+          <div class="col-sm-4"><span class="text-secondary d-block">Origem</span><strong>{{ requisicao.get_origem_display }}</strong></div>
+          <div class="col-sm-4"><span class="text-secondary d-block">Usuário</span><strong>{{ requisicao.usuario.username|default:"sistema" }}</strong></div>
+          <div class="col-sm-4"><span class="text-secondary d-block">Modelo</span><strong>{{ requisicao.modelo|default:"—" }}</strong></div>
+          <div class="col-sm-4"><span class="text-secondary d-block">Duração</span><strong>{{ requisicao.duracao_ms }} ms</strong></div>
+          <div class="col-sm-4">
+            <span class="text-secondary d-block">Resultado</span>
+            {% if requisicao.sucesso %}<span class="badge bg-success">Sucesso</span>{% else %}<span class="badge bg-danger">Erro</span>{% endif %}
+          </div>
+          <div class="col-sm-4"><span class="text-secondary d-block">Tokens (entrada / saída / total)</span><strong>{{ requisicao.tokens_entrada }} / {{ requisicao.tokens_saida }} / {{ requisicao.tokens_total }}</strong></div>
+          <div class="col-sm-4"><span class="text-secondary d-block">Custo estimado</span><strong>US$ {{ requisicao.custo_usd|floatformat:7 }}</strong> <span class="text-secondary">(R$ {{ requisicao.custo_brl|floatformat:5 }})</span></div>
+        </div>
+      </div>
+    </div>
+
+    {% if requisicao.erro %}
+    <div class="alert alert-danger">
+      <h6 class="fw-semibold"><i class="bi bi-exclamation-octagon me-1"></i>Erro</h6>
+      <pre class="mb-0 small text-wrap">{{ requisicao.erro }}</pre>
+    </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body p-4">
+        <h5 class="fw-display text-primary mb-3"><i class="bi bi-box-arrow-up-right me-1"></i>Enviado (prompt)</h5>
+        <pre class="small bg-light p-3 rounded-2 mb-0 text-wrap">{{ requisicao.prompt|default:"—" }}</pre>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <h5 class="fw-display text-primary mb-3"><i class="bi bi-box-arrow-in-down-left me-1"></i>Resposta</h5>
+        <pre class="small bg-light p-3 rounded-2 mb-0 text-wrap">{{ requisicao.resposta|default:"—" }}</pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

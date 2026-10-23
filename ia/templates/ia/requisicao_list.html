@@ -1,0 +1,96 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}Requisições da IA — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h2 class="fw-display mb-0"><i class="bi bi-cpu me-2 text-primary"></i>Requisições da IA</h2>
+  <a href="{% url 'ia:configuracao' %}" class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-sliders me-1"></i>Configuração
+  </a>
+</div>
+<p class="text-secondary small mb-4">
+  Auditoria de toda chamada à IA (assistente, bot, análise de pedidos e testes), com sucesso ou erro.
+  O custo é uma estimativa pelos preços configurados no servidor.
+</p>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body p-4 pb-1">
+    {% include 'website/form-filter.html' %}
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <small class="text-secondary">Chamadas</small>
+      <p class="fs-4 fw-bold mb-0">{{ totais.chamadas }}</p>
+      <small class="{% if totais.erros %}text-danger{% else %}text-secondary{% endif %}">{{ totais.erros }} com erro</small>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <small class="text-secondary">Tokens (entrada / saída)</small>
+      <p class="fs-5 fw-bold mb-0">{{ totais.entrada }} / {{ totais.saida }}</p>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <small class="text-secondary">Tokens no total</small>
+      <p class="fs-4 fw-bold mb-0">{{ totais.total }}</p>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <small class="text-secondary">Custo estimado</small>
+      <p class="fs-5 fw-bold mb-0">US$ {{ totais.custo_usd|floatformat:6 }}</p>
+      <small class="text-secondary">≈ R$ {{ totais.custo_brl|floatformat:4 }}</small>
+    </div></div>
+  </div>
+</div>
+
+{% if requisicoes %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Data</th>
+          <th>Origem</th>
+          <th>Usuário</th>
+          <th>Modelo</th>
+          <th class="text-end">Tokens</th>
+          <th class="text-end">Duração</th>
+          <th>Resultado</th>
+          <th class="text-end">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in requisicoes %}
+        <tr>
+          <td class="text-nowrap small">{{ r.criado_em|date:"d/m/Y H:i:s" }}</td>
+          <td><span class="badge bg-light text-dark border">{{ r.get_origem_display }}</span></td>
+          <td>{% if r.usuario %}{{ r.usuario.username }}{% else %}<span class="text-secondary">sistema</span>{% endif %}</td>
+          <td class="small text-secondary">{{ r.modelo }}</td>
+          <td class="text-end">{{ r.tokens_total }}</td>
+          <td class="text-end text-nowrap">{{ r.duracao_ms }} ms</td>
+          <td>
+            {% if r.sucesso %}<span class="badge bg-success">Sucesso</span>{% else %}<span class="badge bg-danger" title="{{ r.erro }}">Erro</span>{% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'ia:requisicao_detail' r.pk %}" class="btn btn-sm btn-outline-secondary" title="Detalhes">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include 'website/_paginacao.html' %}
+{% elif filter.is_bound %}
+  <div class="alert alert-warning"><i class="bi bi-search me-2"></i>Nenhuma requisição encontrada com esses filtros.</div>
+{% else %}
+  <div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>Nenhuma chamada à IA registrada ainda.</div>
+{% endif %}
+{% endblock %}

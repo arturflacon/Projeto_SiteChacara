@@ -25,8 +25,8 @@ from .views import (
     ClienteUpdate,
     # Avaliações (registros por usuário)
     MinhasAvaliacoesList, AvaliacaoDetail, AvaliacaoCreate, AvaliacaoUpdate, AvaliacaoDelete,
-    # IA (Gemini)
-    ChatbotMensagemView, ChatbotLimparView, ReanalisarPedidoView, UsoIAListView,
+    # IA — análise do pedido
+    ReanalisarPedidoView,
 )
 
 urlpatterns = [
@@ -78,9 +78,4 @@ urlpatterns = [
 
     # --- Cliente ---
     path('cliente/<int:pk>/editar/', ClienteUpdate.as_view(), name='cliente_update'),
-
-    # --- IA (Gemini) ---
-    path('ia/chat/', ChatbotMensagemView.as_view(), name='chatbot_mensagem'),
-    path('ia/chat/limpar/', ChatbotLimparView.as_view(), name='chatbot_limpar'),
-    path('ia/uso/', UsoIAListView.as_view(), name='uso_ia'),
 ]

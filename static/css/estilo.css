@@ -78,6 +78,16 @@
     /* Primary */
     .btn-primary, .bg-primary, .badge.bg-primary { background-color: var(--cp-primary) !important; border-color: var(--cp-primary) !important; }
     .btn-primary:hover                            { background-color: var(--petrol-dark) !important; border-color: var(--petrol-dark) !important; }
+
+    /* Paginação (Django e DataTables) na paleta petróleo */
+    .pagination {
+      --bs-pagination-color: var(--petrol);
+      --bs-pagination-hover-color: var(--petrol-dark);
+      --bs-pagination-focus-color: var(--petrol-dark);
+      --bs-pagination-active-bg: var(--petrol);
+      --bs-pagination-active-border-color: var(--petrol);
+      --bs-pagination-focus-box-shadow: 0 0 0 .25rem rgba(var(--cp-primary-rgb), .25);
+    }
     .btn-outline-primary                          { color: var(--cp-primary) !important; border-color: var(--cp-primary) !important; }
     .btn-outline-primary:hover                    { background-color: var(--cp-primary) !important; color: #fff !important; }
     .text-primary, a.link-primary                 { color: var(--cp-primary) !important; }
@@ -325,21 +335,8 @@
     table.dataTable th.dt-type-date,
     table.dataTable td.dt-type-date { text-align: left; }
 
-    /* ─── ASSISTENTE VIRTUAL (Gemini) ─── */
-    .chatbot-botao {
-      position: fixed;
-      right: 1.25rem;
-      bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
-      width: 3.5rem;
-      height: 3.5rem;
-      z-index: 1040;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .chatbot { --bs-offcanvas-width: 400px; }
-    .chatbot-mensagens {
+    /* ─── BALÕES DE CONVERSA (assistente) ─── */
+    .chat-mensagens {
       overflow-y: auto;
       background: var(--surface);
       display: flex;
@@ -374,4 +371,3 @@
       color: var(--cp-danger);
       border: 1px solid rgba(var(--cp-danger-rgb), .25);
     }
-    .chatbot-aviso { font-size: .75rem; line-height: 1.35; }

@@ -23,7 +23,7 @@
 <body>
 
   <!-- NAVBAR FIXA -->
-  <nav class="navbar navbar-expand-lg navbar-petrol fixed-top">
+  <nav class="navbar navbar-expand-xl navbar-petrol fixed-top">
     <div class="container">
 
       <a class="navbar-brand" href="{% url "index" %}">
@@ -64,71 +64,84 @@
             </a>
           </li>
 
-          {% if user.is_authenticated %}
-            {% if user.cliente %}
-              <li class="nav-item">
-                <a class="nav-link" href="{% url "reserva_create" %}">
-                  <i class="bi bi-calendar-plus me-1"></i>Reservar
-                </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url "minhas_reservas" %}">
-                  <i class="bi bi-list-check me-1"></i>Minhas Reservas
-                </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url "minhas_avaliacoes" %}">
-                  <i class="bi bi-star me-1"></i>Minhas Avaliações
-                </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url "cliente_update" user.cliente.pk %}">
-                  <i class="bi bi-person-vcard me-1"></i>Meus dados
-                </a>
-              </li>
-            {% endif %}
+          {% if user.cliente %}
             <li class="nav-item">
-              <a class="nav-link" href="{% url "password_change" %}">
-                <i class="bi bi-key me-1"></i>Alterar senha
+              <a class="nav-link" href="{% url "reserva_create" %}">
+                <i class="bi bi-calendar-plus me-1"></i>Reservar
               </a>
             </li>
-            {% if eh_admin %}
-              <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" href="#" role="button"
-                   data-bs-toggle="dropdown" aria-expanded="false">
-                  <i class="bi bi-gear me-1"></i>Admin
-                </a>
-                <ul class="dropdown-menu shadow">
-                  <li><a class="dropdown-item" href="{% url "pedidos_pendentes" %}">
-                    <i class="bi bi-hourglass-split me-2"></i>Pedidos Pendentes
-                  </a></li>
-                  <li><a class="dropdown-item" href="{% url "reservas_todas" %}">
-                    <i class="bi bi-journal-text me-2"></i>Todas as Reservas
-                  </a></li>
-                  <li><a class="dropdown-item" href="{% url "uso_ia" %}">
-                    <i class="bi bi-cpu me-2"></i>Uso da IA
-                  </a></li>
-                  <li><hr class="dropdown-divider"></li>
-                  <li><a class="dropdown-item" href="{% url "administrador_create" %}">
-                    <i class="bi bi-person-badge me-2"></i>Novo Administrador
-                  </a></li>
-                </ul>
-              </li>
-            {% endif %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url "minhas_reservas" %}">
+                <i class="bi bi-list-check me-1"></i>Minhas Reservas
+              </a>
+            </li>
+          {% endif %}
+          {% if eh_admin %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button"
+                 data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-gear me-1"></i>Admin
+              </a>
+              <ul class="dropdown-menu shadow">
+                <li><h6 class="dropdown-header">Reservas</h6></li>
+                <li><a class="dropdown-item" href="{% url "pedidos_pendentes" %}">
+                  <i class="bi bi-hourglass-split me-2"></i>Pedidos Pendentes
+                </a></li>
+                <li><a class="dropdown-item" href="{% url "reservas_todas" %}">
+                  <i class="bi bi-journal-text me-2"></i>Todas as Reservas
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header">Inteligência Artificial</h6></li>
+                <li><a class="dropdown-item" href="{% url "ia:requisicoes" %}">
+                  <i class="bi bi-cpu me-2"></i>Requisições da IA
+                </a></li>
+                <li><a class="dropdown-item" href="{% url "ia:usuarios" %}">
+                  <i class="bi bi-people me-2"></i>IA por Usuário
+                </a></li>
+                <li><a class="dropdown-item" href="{% url "ia:configuracao" %}">
+                  <i class="bi bi-sliders me-2"></i>Configuração da IA
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="{% url "administrador_create" %}">
+                  <i class="bi bi-person-badge me-2"></i>Novo Administrador
+                </a></li>
+              </ul>
+            </li>
           {% endif %}
         </ul>
 
-        <div class="d-flex align-items-center gap-2 mt-3 mt-lg-0">
+        <div class="d-flex align-items-center gap-2 mt-3 mt-xl-0">
           {% if user.is_authenticated %}
-            <span class="text-white-50 small d-none d-lg-inline">
-              <i class="bi bi-person-circle me-1"></i>{{ user.username }}
-            </span>
-            <form method="post" action="{% url "logout" %}" class="d-inline m-0">
-              {% csrf_token %}
-              <button type="submit" class="btn-auth btn">
-                <i class="bi bi-box-arrow-right me-1"></i>Sair
+            <div class="dropdown">
+              <button class="btn-auth btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-person-circle me-1"></i>{{ user.username }}
               </button>
-            </form>
+              <ul class="dropdown-menu dropdown-menu-end shadow">
+                {% if user.cliente %}
+                  <li><a class="dropdown-item" href="{% url "cliente_update" user.cliente.pk %}">
+                    <i class="bi bi-person-vcard me-2"></i>Meus dados
+                  </a></li>
+                  <li><a class="dropdown-item" href="{% url "minhas_avaliacoes" %}">
+                    <i class="bi bi-star me-2"></i>Minhas Avaliações
+                  </a></li>
+                {% endif %}
+                <li><a class="dropdown-item" href="{% url "ia:meu_consumo" %}">
+                  <i class="bi bi-speedometer2 me-2"></i>Meu consumo de IA
+                </a></li>
+                <li><a class="dropdown-item" href="{% url "password_change" %}">
+                  <i class="bi bi-key me-2"></i>Alterar senha
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <form method="post" action="{% url "logout" %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="dropdown-item">
+                      <i class="bi bi-box-arrow-right me-2"></i>Sair
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </div>
           {% else %}
             <a href="{% url "login" %}" class="btn-auth btn">
               <i class="bi bi-box-arrow-in-right me-1"></i>Entrar
@@ -202,61 +215,6 @@
     </div>
   </footer>
 
-  <!-- ASSISTENTE VIRTUAL (Gemini) — botão flutuante + Offcanvas -->
-  <button type="button" class="chatbot-botao btn btn-primary rounded-circle shadow"
-          data-bs-toggle="offcanvas" data-bs-target="#chatbot"
-          aria-controls="chatbot" aria-label="Abrir o assistente virtual" title="Assistente virtual">
-    <i class="bi bi-chat-dots fs-4"></i>
-  </button>
-
-  <div class="offcanvas offcanvas-end chatbot" tabindex="-1" id="chatbot" aria-labelledby="chatbot-titulo"
-       data-url-mensagem="{% url "chatbot_mensagem" %}" data-url-limpar="{% url "chatbot_limpar" %}"
-       data-habilitado="{{ ia_habilitada|yesno:"1,0" }}">
-    <div class="offcanvas-header border-bottom">
-      <h5 class="offcanvas-title fw-display" id="chatbot-titulo">
-        <i class="bi bi-chat-dots me-2 text-primary"></i>Assistente do Sítio de Lurdes
-      </h5>
-      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
-    </div>
-    <div class="offcanvas-body d-flex flex-column p-0">
-      <div class="chatbot-mensagens flex-grow-1 p-3" id="chatbot-mensagens" aria-live="polite">
-        {% if ia_habilitada %}
-          <div class="chat-balao chat-model">Olá! Sou o assistente virtual do Sítio de Lurdes. Posso ajudar com preços, datas ocupadas e como fazer seu pedido.</div>
-          <div class="chatbot-sugestoes d-flex flex-wrap gap-2 mb-3" id="chatbot-sugestoes">
-            <button type="button" class="btn btn-sm btn-outline-primary">Quanto custa a diária?</button>
-            <button type="button" class="btn btn-sm btn-outline-primary">Quais datas estão ocupadas?</button>
-            <button type="button" class="btn btn-sm btn-outline-primary">Como faço uma reserva?</button>
-          </div>
-        {% else %}
-          <div class="alert alert-secondary small mb-0">
-            <i class="bi bi-cloud-slash me-1"></i>Assistente indisponível no momento.
-          </div>
-        {% endif %}
-      </div>
-      <div class="chatbot-digitando small text-secondary px-3 pb-2" id="chatbot-digitando" hidden>
-        <span class="spinner-grow spinner-grow-sm me-1" aria-hidden="true"></span>digitando...
-      </div>
-      <form class="chatbot-form border-top p-3" id="chatbot-form">
-        {% csrf_token %}
-        <label for="chatbot-texto" class="visually-hidden">Sua pergunta</label>
-        <textarea class="form-control mb-2" id="chatbot-texto" name="mensagem" rows="2" maxlength="500"
-                  placeholder="Escreva sua pergunta..." {% if not ia_habilitada %}disabled{% endif %}></textarea>
-        <div class="d-flex justify-content-between gap-2">
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="chatbot-limpar" {% if not ia_habilitada %}disabled{% endif %}>
-            <i class="bi bi-arrow-counterclockwise me-1"></i>Nova conversa
-          </button>
-          <button type="submit" class="btn btn-sm btn-primary px-3" {% if not ia_habilitada %}disabled{% endif %}>
-            <i class="bi bi-send me-1"></i>Enviar
-          </button>
-        </div>
-        <p class="chatbot-aviso text-secondary mt-2 mb-0">
-          Respostas geradas por IA podem conter erros. A confirmação da reserva é sempre feita pela administradora.
-        </p>
-      </form>
-    </div>
-  </div>
-  {{ chat_historico|json_script:"chat-historico" }}
-
   <!-- Bibliotecas (cdnjs, versões fixas). Ordem: jQuery -> plugins jQuery -> Bootstrap -> site.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <!-- Plugin 1: jQuery Mask Plugin (máscara de telefone) -->
@@ -269,7 +227,6 @@
   <!-- Bootstrap depois do jQuery: assim ele registra $.fn.modal, que o Bootbox usa -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
   <script src="{% static "js/site.js" %}"></script>
-  <script src="{% static "js/chatbot.js" %}"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

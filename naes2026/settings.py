@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'website.apps.WebsiteConfig',
+    'ia.apps.IaConfig',
 
     'crispy_forms',
     'crispy_bootstrap5',
@@ -70,7 +71,6 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'website.context_processors.perfil',
-                'website.context_processors.chatbot',
             ],
         },
     },
@@ -140,25 +140,23 @@ if DEBUG and not TESTANDO:
     INTERNAL_IPS = ['127.0.0.1']
 
 # ---------------------------------------------------------------------------
-# IA generativa — Gemini (google-genai)
+# IA generativa — Gemini (google-genai). Ver app "ia" e a skill integracao-ia.
 # ---------------------------------------------------------------------------
 # A chave vem SEMPRE do ambiente (.env local / env_variables do app.yaml).
+# Modelo, temperatura, limite de tokens, timeout e cota ficam na
+# ConfiguracaoIA (banco), editável em IA → Configuração.
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-3.5-flash-lite')
-GEMINI_PRECO_ENTRADA_USD = 0.30 / 1_000_000   # por token
-GEMINI_PRECO_SAIDA_USD = 2.50 / 1_000_000     # por token
-GEMINI_COTACAO_BRL = 5.50
-GEMINI_TIMEOUT_CHAT_MS = 20_000      # timeout de cada chamada do chat
-GEMINI_TIMEOUT_ANALISE_MS = 8_000    # a análise roda no envio do pedido: timeout curto
-
 # Produção com identidade de serviço (Vertex AI), sem API Key. Desligado por padrão.
 GEMINI_USAR_VERTEX = os.environ.get('GEMINI_USAR_VERTEX', 'False') == 'True'
 GOOGLE_CLOUD_PROJECT = os.environ.get('GOOGLE_CLOUD_PROJECT', '')
 GOOGLE_CLOUD_LOCATION = os.environ.get('GOOGLE_CLOUD_LOCATION', 'global')
 
+# Só para a ESTIMATIVA de custo mostrada em Requisições da IA.
+GEMINI_PRECO_ENTRADA_USD = 0.30 / 1_000_000   # por token
+GEMINI_PRECO_SAIDA_USD = 2.50 / 1_000_000     # por token
+GEMINI_COTACAO_BRL = 5.50
+
 if TESTANDO:
     # Nenhum teste pode chamar a API de verdade, mesmo que o .env tenha a chave.
     GEMINI_API_KEY = ''
     GEMINI_USAR_VERTEX = False
-
-IA_HABILITADA = bool(GEMINI_API_KEY) or GEMINI_USAR_VERTEX
