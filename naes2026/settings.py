@@ -30,6 +30,15 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+    # Requisições internas do App Engine (/_ah/warmup etc.) chegam sem HTTPS.
+    SECURE_REDIRECT_EXEMPT = [r'^_ah/']
+    # HSTS começa curto (1 hora). Depois de confirmar que tudo funciona só em
+    # HTTPS, dá para aumentar pela variável de ambiente (ex.: 31536000 = 1 ano).
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '3600'))
+    # Decisão consciente (ver docs/deploy.md): includeSubDomains e preload são
+    # difíceis de desfazer e os subdomínios de appspot.com não são do projeto.
+    SILENCED_SYSTEM_CHECKS = ['security.W005', 'security.W021']
 
 
 INSTALLED_APPS = [
