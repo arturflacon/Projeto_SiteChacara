@@ -138,6 +138,18 @@
 
   <!-- MAIN CONTENT -->
   <main style="padding-top: 56px;">
+    <!-- MENSAGENS (framework de mensagens do Django), logo abaixo da navbar -->
+    {% if messages %}
+    <div class="container pt-3" id="mensagens">
+      {% for message in messages %}
+      <div class="alert alert-{{ message.level_tag }} alert-dismissible fade show shadow-sm d-flex align-items-start" role="alert">
+        <i class="bi {% if message.level_tag == 'success' %}bi-check-circle{% elif message.level_tag == 'danger' %}bi-exclamation-octagon{% elif message.level_tag == 'warning' %}bi-exclamation-triangle{% else %}bi-info-circle{% endif %} me-2 mt-1"></i>
+        <div>{{ message }}</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% block hero %}{% endblock %}
     <div class="container py-5">
       {% block main %}{% endblock %}
@@ -183,22 +195,6 @@
       <p class="mb-0 small text-center">&copy; 2026 Sítio de Lurdes. Todos os direitos reservados.</p>
     </div>
   </footer>
-
-  <!-- MENSAGENS (Toasts do Bootstrap 5, canto inferior direito) -->
-  {% if messages %}
-  <div class="toast-container position-fixed bottom-0 end-0 p-3 toast-acima-do-chat">
-    {% for message in messages %}
-    <div class="toast align-items-center text-bg-{{ message.level_tag }} border-0"
-         role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="6000">
-      <div class="d-flex">
-        <div class="toast-body">{{ message }}</div>
-        <button type="button" class="btn-close {% if message.level_tag != 'warning' and message.level_tag != 'info' %}btn-close-white {% endif %}me-2 m-auto"
-                data-bs-dismiss="toast" aria-label="Fechar"></button>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
 
   <!-- ASSISTENTE VIRTUAL (Gemini) — botão flutuante + Offcanvas -->
   <button type="button" class="chatbot-botao btn btn-primary rounded-circle shadow"
@@ -258,14 +254,6 @@
   <!-- Bibliotecas globais: jQuery antes de tudo que depende dele -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // Mostra as mensagens do Django como toasts assim que a página carrega.
-    $(function () {
-      $('.toast').each(function () {
-        bootstrap.Toast.getOrCreateInstance(this).show();
-      });
-    });
-  </script>
   <script src="{% static "js/chatbot.js" %}"></script>
   {% block extra_js %}{% endblock %}
 </body>

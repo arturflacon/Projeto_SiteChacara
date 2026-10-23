@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import AnonymousUser, Group, User
+from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -396,7 +397,7 @@ class MovimentoReservaTest(TestCase):
         self.assertEqual(pedido.status, Reserva.STATUS_PENDENTE)
         self.assertFalse(pedido.historico.exists())
         self.assertContains(response, 'já existe uma reserva confirmada nesse período')
-        self.assertContains(response, 'text-bg-danger')  # MESSAGE_TAGS: error -> danger
+        self.assertContains(response, 'alert alert-danger')  # MESSAGE_TAGS: error -> danger
 
     def test_tela_de_aprovacao_registra_observacao(self):
         pedido = self._reserva()
@@ -805,6 +806,109 @@ class ServicesTest(TestCase):
         confirmada = self._reserva(status=Reserva.STATUS_CONFIRMADA)
         with self.assertRaisesMessage(services.ErroRegraNegocio, 'Só é possível cancelar pedidos pendentes'):
             services.cancelar_pedido_cliente(confirmada.pk, self.user)
+
+
+# ---------------------------------------------------------------------------
+# Framework de mensagens: toda Create/Update/Delete e toda decisão avisam
+# ---------------------------------------------------------------------------
+
+def ultima_mensagem(response):
+    """Texto da mensagem mais recente (sem uma página renderizada entre os
+    POSTs, as mensagens anteriores continuam pendentes no cookie)."""
+    return [str(m) for m in get_messages(response.wsgi_request)][-1]
+
+
+class MensagensTest(TestCase):
+    def setUp(self):
+        self.chacara = Chacara.objects.order_by('pk').first() or make_chacara()
+        self.user = make_user()
+        self.cliente = Cliente.objects.create(nome='João Silva', telefone='11999990000', usuario=self.user)
+        self.admin_user = make_admin_user()
+        self.hoje = timezone.localdate()
+        self.cli = Client()
+        self.cli.login(username='clienteuser', password='testpass123')
+        self.admin = Client()
+        self.admin.login(username='adminuser', password='testpass123')
+
+    def _reserva(self, inicio=10, fim=13, status=Reserva.STATUS_PENDENTE):
+        return Reserva.objects.create(
+            cliente=self.cliente, chacara=self.chacara, status=status,
+            data_inicio=self.hoje + timedelta(days=inicio), data_fim=self.hoje + timedelta(days=fim))
+
+    def test_alert_dismissivel_abaixo_da_navbar(self):
+        pedido = self._reserva()
+        response = self.admin.post(reverse('reserva_recusar', args=[pedido.pk]), follow=True)
+        self.assertContains(response, 'alert alert-success alert-dismissible')
+        self.assertContains(response, 'data-bs-dismiss="alert"')
+        html = response.content.decode()
+        self.assertLess(html.index('</nav>'), html.index('id="mensagens"'))
+
+    def test_signup(self):
+        response = Client().post(reverse('signup'), {
+            'username': 'novo', 'email': 'novo@exemplo.com',
+            'password1': 'SenhaForte!2026', 'password2': 'SenhaForte!2026',
+            'nome': 'Cliente Novo', 'telefone': '(46) 99999-8888',
+        })
+        self.assertIn('Bem-vindo(a), Cliente Novo!', ultima_mensagem(response))
+
+    def test_edicao_dos_dados_do_cliente(self):
+        response = self.cli.post(reverse('cliente_update', args=[self.cliente.pk]),
+                                 {'nome': 'João S.', 'telefone': '(11) 99999-0000'})
+        self.assertEqual(ultima_mensagem(response), 'Seus dados foram atualizados, João S..')
+
+    def test_criar_editar_e_cancelar_pedido(self):
+        inicio = self.hoje + timedelta(days=20)
+        fim = inicio + timedelta(days=2)
+        response = self.cli.post(reverse('reserva_create'), {
+            'data_inicio': inicio.isoformat(), 'data_fim': fim.isoformat(), 'observacoes': ''})
+        self.assertIn(f'Pedido de {inicio:%d/%m/%Y} a {fim:%d/%m/%Y} enviado!', ultima_mensagem(response))
+
+        pedido = Reserva.objects.get(cliente=self.cliente)
+        response = self.cli.post(reverse('minha_reserva_update', args=[pedido.pk]), {
+            'data_inicio': inicio.isoformat(), 'data_fim': fim.isoformat(), 'observacoes': 'Família'})
+        self.assertIn(f'Pedido #{pedido.pk} atualizado', ultima_mensagem(response))
+
+        response = self.cli.post(reverse('minha_reserva_delete', args=[pedido.pk]))
+        self.assertEqual(ultima_mensagem(response), f'Pedido de {inicio:%d/%m/%Y} a {fim:%d/%m/%Y} cancelado.')
+
+    def test_edicao_e_exclusao_de_reserva_pelo_admin(self):
+        pedido = self._reserva()
+        response = self.admin.post(reverse('reserva_update', args=[pedido.pk]), {
+            'chacara': self.chacara.pk, 'data_inicio': pedido.data_inicio.isoformat(),
+            'data_fim': pedido.data_fim.isoformat(), 'observacoes': '', 'status': Reserva.STATUS_PENDENTE})
+        self.assertEqual(ultima_mensagem(response), f'Reserva #{pedido.pk} de João Silva atualizada.')
+
+        response = self.admin.post(reverse('reserva_delete', args=[pedido.pk]))
+        self.assertEqual(ultima_mensagem(response), f'Reserva #{pedido.pk} de João Silva excluída.')
+
+    def test_edicao_da_chacara(self):
+        response = self.admin.post(reverse('chacara_update', args=[self.chacara.pk]), {
+            'nome': 'Sítio de Lurdes', 'descricao': 'Descrição', 'preco_diaria': '600.00',
+            'num_quartos': 3, 'num_banheiros': 2})
+        self.assertEqual(ultima_mensagem(response), 'Informações da chácara "Sítio de Lurdes" atualizadas.')
+
+    def test_cadastro_de_administrador(self):
+        novo = make_user(username='novoadmin')
+        response = self.admin.post(reverse('administrador_create'), {'nome': 'Ana Admin', 'usuario': novo.pk})
+        self.assertEqual(ultima_mensagem(response), 'Administrador Ana Admin cadastrado com sucesso.')
+
+    def test_aprovar_e_recusar(self):
+        a = self._reserva(inicio=10, fim=13)
+        response = self.admin.post(reverse('reserva_aprovar', args=[a.pk]))
+        self.assertEqual(ultima_mensagem(response), 'Pedido de João Silva aprovado.')
+
+        b = self._reserva(inicio=30, fim=32)
+        response = self.admin.post(reverse('reserva_recusar', args=[b.pk]))
+        self.assertEqual(ultima_mensagem(response), 'Pedido de João Silva recusado.')
+
+    def test_erro_de_regra_vira_mensagem_de_erro(self):
+        self._reserva(inicio=10, fim=15, status=Reserva.STATUS_CONFIRMADA)
+        pedido = self._reserva(inicio=12, fim=14)
+        response = self.admin.post(reverse('reserva_aprovar', args=[pedido.pk]))
+        mensagens = list(get_messages(response.wsgi_request))
+        self.assertEqual(len(mensagens), 1)
+        self.assertEqual(mensagens[0].level_tag, 'danger')
+        self.assertIn('já existe uma reserva confirmada', str(mensagens[0]))
 
 
 # ---------------------------------------------------------------------------

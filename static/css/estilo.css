@@ -337,8 +337,6 @@
       align-items: center;
       justify-content: center;
     }
-    /* Os toasts sobem para não ficarem atrás do botão do chat */
-    .toast-acima-do-chat { margin-bottom: 4.5rem; }
 
     .chatbot { --bs-offcanvas-width: 400px; }
     .chatbot-mensagens {

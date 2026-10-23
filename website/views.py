@@ -141,7 +141,7 @@ class SignupView(SuccessMessageMixin, FormView):
     template_name = 'website/registro.html'
     form_class = SignupForm
     success_url = reverse_lazy('index')
-    success_message = 'Conta criada com sucesso! Você já pode fazer seu pedido de reserva.'
+    success_message = 'Bem-vindo(a), %(nome)s! Sua conta foi criada e você já pode fazer seu pedido de reserva.'
     extra_context = {'titulo': 'Cadastro de Cliente', 'botao': 'Criar conta'}
 
     def form_valid(self, form):
@@ -159,7 +159,7 @@ class ReservaCreate(LoginRequiredMixin, SuccessMessageMixin, CreateView):
     form_class = ReservaClienteForm
     template_name = 'website/reserva_form.html'
     success_url = reverse_lazy('minhas_reservas')
-    success_message = 'Pedido enviado! Aguarde a confirmação da administradora.'
+    success_message = 'Pedido de %(data_inicio)s a %(data_fim)s enviado! Aguarde a confirmação da administradora.'
     extra_context = {'titulo': 'Fazer Pedido de Reserva', 'botao': 'Enviar Pedido'}
 
     def dispatch(self, request, *args, **kwargs):
@@ -184,7 +184,10 @@ class ReservaCreate(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         except ErroRegraNegocio as erro:
             form.add_error(None, str(erro))
             return self.form_invalid(form)
-        messages.success(self.request, self.get_success_message(form.cleaned_data))
+        messages.success(self.request, self.get_success_message({
+            'data_inicio': f"{self.object.data_inicio:%d/%m/%Y}",
+            'data_fim': f"{self.object.data_fim:%d/%m/%Y}",
+        }))
         # O pedido já está salvo. Se a IA falhar ou estiver desligada,
         # analisar_pedido só devolve None e o fluxo segue.
         ia.analisar_pedido(self.object, usuario=self.request.user)
@@ -261,7 +264,10 @@ class MinhaReservaUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView
     form_class = ReservaClienteForm
     template_name = 'website/reserva_form.html'
     success_url = reverse_lazy('minhas_reservas')
-    success_message = 'Pedido editado com sucesso.'
+    success_message = 'Pedido #%(pk)s atualizado. Ele continua aguardando a decisão da administradora.'
+
+    def get_success_message(self, cleaned_data):
+        return self.success_message % {'pk': self.object.pk}
     extra_context = {'titulo': 'Editar Meu Pedido', 'botao': 'Salvar Alterações'}
 
     def get_queryset(self):
@@ -410,8 +416,15 @@ class ReservaUpdateView(AdminRequiredMixin, SuccessMessageMixin, UpdateView):
     model = Reserva
     form_class = ReservaAdminForm
     template_name = 'website/reserva_form.html'
-    success_message = 'Reserva atualizada.'
+    success_message = 'Reserva #%(pk)s de %(cliente)s atualizada.'
     extra_context = {'titulo': 'Editar Reserva', 'botao': 'Salvar Alterações'}
+
+    def get_queryset(self):
+        # select_related: a mensagem de sucesso usa cliente.nome.
+        return Reserva.objects.select_related('cliente', 'chacara')
+
+    def get_success_message(self, cleaned_data):
+        return self.success_message % {'pk': self.object.pk, 'cliente': self.object.cliente.nome}
 
     def get_success_url(self):
         return reverse('reserva_detail', args=[self.object.pk])
@@ -443,12 +456,21 @@ class ReservaDeleteView(AdminRequiredMixin, SuccessMessageMixin, DeleteView):
     model = Reserva
     template_name = 'website/reserva_confirm_delete.html'
     success_url = reverse_lazy('reservas_todas')
-    success_message = 'Reserva excluída.'
+    success_message = 'Reserva #%(pk)s de %(cliente)s excluída.'
     extra_context = {'titulo': 'Excluir Reserva'}
 
     def get_queryset(self):
         # select_related: a confirmação mostra cliente e chácara.
         return Reserva.objects.select_related('cliente', 'chacara')
+
+    def get_success_message(self, cleaned_data):
+        # Depois do delete() o objeto ainda está em memória (só perdeu o pk
+        # no banco); por isso o número é guardado antes.
+        return self.success_message % {'pk': self._pk_excluido, 'cliente': self.object.cliente.nome}
+
+    def form_valid(self, form):
+        self._pk_excluido = self.object.pk
+        return super().form_valid(form)
 
 
 # ---------------------------------------------------------------------------
@@ -464,7 +486,7 @@ class ChacaraUpdate(AdminRequiredMixin, SuccessMessageMixin, UpdateView):
     ]
     template_name = 'website/chacara_form.html'
     success_url = reverse_lazy('chacara_unica')
-    success_message = 'Informações da chácara atualizadas.'
+    success_message = 'Informações da chácara "%(nome)s" atualizadas.'
     extra_context = {'titulo': 'Editar Chácara', 'botao': 'Salvar Alterações'}
 
 
@@ -477,7 +499,7 @@ class ClienteUpdate(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     form_class = ClienteForm
     template_name = 'website/cliente_form.html'
     success_url = reverse_lazy('index')
-    success_message = 'Seus dados foram salvos.'
+    success_message = 'Seus dados foram atualizados, %(nome)s.'
     extra_context = {'titulo': 'Editar Cliente', 'botao': 'Salvar Alterações'}
 
     def get_queryset(self):
