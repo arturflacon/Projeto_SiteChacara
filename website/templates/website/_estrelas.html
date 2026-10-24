@@ -1,0 +1,7 @@
+{% load sitio_tags %}
+{% comment %}
+  Estrelas de uma nota de 0 a 5. Uso: include 'website/_estrelas.html' with nota=avaliacao.nota
+{% endcomment %}
+<span class="estrelas text-warning text-nowrap" role="img" aria-label="Nota {{ nota|floatformat:1 }} de 5">
+  {% for icone in nota|estrelas %}<i class="bi {{ icone }}" aria-hidden="true"></i>{% endfor %}
+</span>

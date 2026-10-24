@@ -1,9 +1,7 @@
-from decimal import Decimal
-
-from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.utils import timezone
 
 
@@ -101,7 +99,7 @@ class Reserva(models.Model):
     analise_ia = models.JSONField(
         null=True, blank=True,
         verbose_name='Análise da IA',
-        help_text='Resumo do pedido gerado automaticamente pelo Gemini (apoio à administradora).'
+        help_text='Resumo do pedido gerado automaticamente pela IA (apoio à administradora).'
     )
     analise_ia_em = models.DateTimeField(
         null=True, blank=True,
@@ -188,66 +186,66 @@ class HistoricoReserva(models.Model):
         return f"Reserva #{self.reserva_id}: {self.status_anterior or '—'} → {self.status_novo}"
 
 
-class UsoIA(models.Model):
-    """Métricas de cada chamada ao Gemini (tokens e custo).
+class Avaliacao(models.Model):
+    """Avaliação de uma estadia, feita pelo próprio cliente.
 
-    Por minimização de dados, o texto das mensagens NÃO é guardado.
+    Regra de elegibilidade (``services.reservas_avaliaveis``): só a PRÓPRIA
+    reserva, CONFIRMADA e com a estadia já concluída (``data_fim <= hoje``).
+    Antes disso não há o que avaliar, e um pedido pendente/recusado nunca
+    virou estadia. Uma avaliação por reserva (OneToOne).
     """
 
-    CHAT = 'CHAT'
-    ANALISE = 'ANALISE'
-    TIPO_CHOICES = [
-        (CHAT, 'Chat (assistente)'),
-        (ANALISE, 'Análise de pedido'),
+    NOTA_MINIMA = 1
+    NOTA_MAXIMA = 5
+    NOTA_CHOICES = [
+        (1, '1 — Ruim'),
+        (2, '2 — Regular'),
+        (3, '3 — Boa'),
+        (4, '4 — Muito boa'),
+        (5, '5 — Excelente'),
     ]
 
-    tipo = models.CharField(
-        max_length=10, choices=TIPO_CHOICES,
-        verbose_name='Tipo', help_text='Chat com o assistente ou análise automática de pedido.'
-    )
-    tokens_entrada = models.PositiveIntegerField(
-        default=0,
-        verbose_name='Tokens de Entrada', help_text='prompt_token_count: instrução + histórico + mensagem.'
-    )
-    tokens_saida = models.PositiveIntegerField(
-        default=0,
-        verbose_name='Tokens de Saída', help_text='Tokens gerados pelo modelo (resposta + raciocínio).'
-    )
-    custo_usd = models.DecimalField(
-        max_digits=12, decimal_places=8, default=0,
-        verbose_name='Custo (US$)', help_text='Calculado automaticamente com os preços do settings.'
-    )
     usuario = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True,
-        verbose_name='Usuário', help_text='Quem fez a chamada (vazio para visitante).'
+        User, on_delete=models.CASCADE, related_name='avaliacoes',
+        verbose_name='Usuário', help_text='Quem fez a avaliação (preenchido automaticamente).'
     )
-    reserva = models.ForeignKey(
-        Reserva, on_delete=models.SET_NULL, null=True, blank=True,
-        verbose_name='Reserva', help_text='Reserva analisada (só nas análises de pedido).'
+    reserva = models.OneToOneField(
+        Reserva, on_delete=models.CASCADE, related_name='avaliacao',
+        verbose_name='Reserva', help_text='Estadia avaliada (confirmada e já concluída).'
     )
-    data = models.DateTimeField(
+    nota = models.PositiveSmallIntegerField(
+        choices=NOTA_CHOICES,
+        validators=[MinValueValidator(NOTA_MINIMA), MaxValueValidator(NOTA_MAXIMA)],
+        verbose_name='Nota', help_text='De 1 (ruim) a 5 (excelente).'
+    )
+    comentario = models.TextField(
+        blank=True, max_length=1000,
+        verbose_name='Comentário', help_text='Opcional. Conte como foi a estadia (até 1000 caracteres).'
+    )
+    criado_em = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='Data', help_text='Data e hora da chamada.'
+        verbose_name='Criada em', help_text='Data e hora em que a avaliação foi enviada.'
+    )
+    atualizado_em = models.DateTimeField(
+        auto_now=True,
+        verbose_name='Atualizada em', help_text='Data e hora da última alteração.'
     )
 
     class Meta:
-        verbose_name = 'Uso da IA'
-        verbose_name_plural = 'Usos da IA'
-        ordering = ['-data']
+        verbose_name = 'Avaliação'
+        verbose_name_plural = 'Avaliações'
+        ordering = ['-criado_em']
 
     def __str__(self):
-        return f"{self.get_tipo_display()} — {self.tokens_entrada}+{self.tokens_saida} tokens"
+        return f"Avaliação {self.nota}/5 — reserva #{self.reserva_id}"
 
-    def calcular_custo(self):
-        entrada = Decimal(str(settings.GEMINI_PRECO_ENTRADA_USD))
-        saida = Decimal(str(settings.GEMINI_PRECO_SAIDA_USD))
-        custo = self.tokens_entrada * entrada + self.tokens_saida * saida
-        return custo.quantize(Decimal('0.00000001'))
-
-    def save(self, *args, **kwargs):
-        self.custo_usd = self.calcular_custo()
-        super().save(*args, **kwargs)
-
-    @property
-    def custo_brl(self):
-        return Decimal(self.custo_usd) * Decimal(str(settings.GEMINI_COTACAO_BRL))
+    def clean(self):
+        # O usuário é preenchido pela view antes da validação (nunca vem do POST).
+        if not self.reserva_id or not self.usuario_id:
+            return
+        reserva = self.reserva
+        if reserva.cliente.usuario_id != self.usuario_id:
+            raise ValidationError({'reserva': 'Você só pode avaliar as suas próprias reservas.'})
+        if reserva.status != Reserva.STATUS_CONFIRMADA or reserva.data_fim > timezone.localdate():
+            raise ValidationError(
+                {'reserva': 'Só é possível avaliar uma reserva confirmada cuja estadia já terminou.'})

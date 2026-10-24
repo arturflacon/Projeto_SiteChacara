@@ -1,0 +1,48 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}Mensagens do Bot — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h2 class="fw-display mb-0"><i class="bi bi-telegram me-2 text-primary"></i>Mensagens do Bot</h2>
+  <span class="badge bg-primary fs-6">{{ page_obj.paginator.count }} registro{{ page_obj.paginator.count|pluralize }}</span>
+</div>
+<p class="text-secondary small mb-4">Log de tudo o que entrou no bot do Telegram e de tudo o que ele respondeu.</p>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body p-4 pb-1">
+    {% include 'website/form-filter.html' %}
+  </div>
+</div>
+
+{% if mensagens_bot %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead class="table-light">
+        <tr><th>Data</th><th>Direção</th><th>Tipo</th><th>Usuário</th><th>Chat</th><th>Texto</th></tr>
+      </thead>
+      <tbody>
+        {% for m in mensagens_bot %}
+        <tr>
+          <td class="small text-nowrap">{{ m.criado_em|date:"d/m/Y H:i:s" }}</td>
+          <td>
+            {% if m.direcao == 'ENTRADA' %}<span class="badge bg-info">Entrada</span>{% else %}<span class="badge bg-secondary">Saída</span>{% endif %}
+            {% if m.aviso_limite %}<span class="badge bg-warning text-dark" title="Aviso de limite">limite</span>{% endif %}
+          </td>
+          <td class="small">{{ m.get_tipo_display }}</td>
+          <td>{{ m.usuario.username|default:"—" }}</td>
+          <td class="small text-secondary">{{ m.chat_id|default:"—" }}</td>
+          <td class="small" style="max-width: 28rem;">{{ m.texto|truncatechars:140 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include 'website/_paginacao.html' %}
+{% elif filter.is_bound %}
+  <div class="alert alert-warning"><i class="bi bi-search me-2"></i>Nenhuma mensagem encontrada com esses filtros.</div>
+{% else %}
+  <div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>O bot ainda não recebeu mensagens.</div>
+{% endif %}
+{% endblock %}

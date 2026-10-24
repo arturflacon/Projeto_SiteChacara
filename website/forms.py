@@ -5,7 +5,8 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from .models import Chacara, Cliente, Reserva
+from .models import Avaliacao, Cliente, Reserva
+from .services import chacara_principal, reservas_avaliaveis
 
 
 def limpar_telefone(valor):
@@ -104,7 +105,7 @@ class ReservaClienteForm(forms.ModelForm):
                     {'data_fim': 'A data de saída deve ser posterior à data de chegada (mínimo de 1 diária).'}
                 )
 
-            chacara = Chacara.objects.first()
+            chacara = chacara_principal()
             if chacara:
                 conflito = Reserva.objects.filter(
                     chacara=chacara,
@@ -145,3 +146,48 @@ class DecisaoReservaForm(forms.Form):
         help_text='Opcional. Fica registrada no histórico da reserva.',
         widget=forms.Textarea(attrs={'rows': 3}),
     )
+
+
+class ReservaAvaliavelField(forms.ModelChoiceField):
+    def label_from_instance(self, reserva):
+        return f'{reserva.data_inicio:%d/%m/%Y} a {reserva.data_fim:%d/%m/%Y} — {reserva.chacara.nome}'
+
+
+class AvaliacaoForm(forms.ModelForm):
+    """Criação: o cliente escolhe uma das SUAS reservas avaliáveis.
+
+    O usuário vem da view (nunca do POST) e é colocado na instância antes da
+    validação, para que o Avaliacao.clean() confira dono e elegibilidade.
+    """
+
+    reserva = ReservaAvaliavelField(
+        queryset=Reserva.objects.none(),
+        label='Estadia',
+        help_text='Só aparecem as suas reservas confirmadas já concluídas e ainda não avaliadas.',
+        empty_label='Selecione a estadia',
+    )
+
+    class Meta:
+        model = Avaliacao
+        fields = ['reserva', 'nota', 'comentario']
+        widgets = {
+            'nota': forms.RadioSelect,
+            'comentario': forms.Textarea(attrs={'rows': 4, 'maxlength': 1000}),
+        }
+
+    def __init__(self, *args, usuario, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance.usuario = usuario
+        self.fields['reserva'].queryset = reservas_avaliaveis(usuario)
+
+
+class AvaliacaoUpdateForm(forms.ModelForm):
+    """Edição: a estadia avaliada não muda, só a nota e o comentário."""
+
+    class Meta:
+        model = Avaliacao
+        fields = ['nota', 'comentario']
+        widgets = {
+            'nota': forms.RadioSelect,
+            'comentario': forms.Textarea(attrs={'rows': 4, 'maxlength': 1000}),
+        }

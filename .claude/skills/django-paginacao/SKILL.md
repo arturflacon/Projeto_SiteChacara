@@ -1,58 +1,60 @@
 ---
 name: django-paginacao
-description: Use sempre que for criar ou editar uma listagem neste projeto Django — ListView, FilterView ou template de lista — para que toda lista seja paginada do mesmo jeito: paginate_by com ordering na view e um único paginacao.html incluído com {% include %}, que mantém os parâmetros de busca da URL ao trocar de página.
+description: Use sempre que for criar ou editar uma listagem neste projeto Django — ListView, FilterView ou template de lista — para que toda lista seja paginada do mesmo jeito: paginate_by com ordering na view e o partial único _paginacao.html, que usa a templatetag própria url_com_parametros para manter os filtros da URL ao trocar de página.
 ---
 
-## Antes de mexer em qualquer listagem
+## A base (já existe — não recrie)
 
-Existe UM `paginacao.html` no app que guarda o template base
-(`<app>/templates/<app>/paginacao.html`) com exatamente este conteúdo. Se não
-existir, crie antes de tudo:
+1. `website/templatetags/url_params.py`:
+   - `{% url_com_parametros page=N %}` (`simple_tag(takes_context=True)`):
+     copia o `request.GET`, troca/insere os parâmetros informados, remove os
+     que vierem `None`/vazios e devolve a query string codificada começando
+     com `?`. É ela que preserva os filtros.
+   - `{% paginas_proximas page_obj as paginas %}`: números ao redor da
+     página atual, com reticências (`page_obj.paginator.ELLIPSIS`).
+2. `website/templates/website/_paginacao.html`: o ÚNICO bloco de paginação
+   do projeto — "Página X de N · total", **Anterior**, números próximos e
+   **Próxima**, no visual `pagination-sm` do Bootstrap.
 
-```html
-{# Navegação entre páginas: mantém os filtros da URL (tudo, menos o "page") #}
-{% if is_paginated %}
-<nav aria-label="Páginas">
-    <ul class="pagination">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?{% for chave, valor in request.GET.items %}{% if chave != 'page' %}{{ chave }}={{ valor|urlencode }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">Anterior</a>
-        </li>
-        {% endif %}
-        <li class="page-item disabled"><span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
-        {% if page_obj.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?{% for chave, valor in request.GET.items %}{% if chave != 'page' %}{{ chave }}={{ valor|urlencode }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">Próxima</a>
-        </li>
-        {% endif %}
-    </ul>
-</nav>
-{% endif %}
-```
+Se precisar mudar o visual ou o comportamento da paginação, mude esses dois
+arquivos e mais nada.
 
 ## A view
 
-1. Toda `ListView` e `FilterView` de registros tem `paginate_by` (padrão 10) e
-   `ordering` (ex.: `ordering = ['nome']`, ou `['-cadastrado_em']` para os mais
-   recentes primeiro). Sem ordering, a paginação fica inconsistente e o Django
-   avisa `UnorderedObjectListWarning`.
-2. Se a view tem `get_queryset`, ele parte de `super().get_queryset()`, que é o
-   que aplica o `ordering`. Se precisar devolver uma consulta nova
-   (`Modelo.objects...`), ela termina com `.order_by(...)`.
-3. Listas pequenas e fixas (ex.: os estados do Brasil) podem ficar sem
-   paginação, mas então não têm `paginate_by` nem o include.
+1. Toda `ListView` e `FilterView` de registros tem `paginate_by` (padrão 10)
+   e `ordering` (ex.: `ordering = ['-data_pedido']`). Sem ordering a
+   paginação fica inconsistente e o Django avisa `UnorderedObjectListWarning`.
+2. Se a view tem `get_queryset`, ele parte de `super().get_queryset()` (que
+   aplica o `ordering`). Se devolver uma consulta nova, ela termina com `.order_by(...)`.
+3. O `get_queryset` traz o que a tabela mostra com `select_related` /
+   `prefetch_related` / `annotate` (ver `docs/otimizacoes.md`).
+4. Listas pequenas e fixas podem ficar sem paginação — aí sem `paginate_by`
+   nem o include (e, se for tabela, use a skill `datatables-listagens`).
 
 ## O template da lista
 
 1. Logo depois da `</table>` (ou do fim da lista de cards):
-   `{% include '<app>/paginacao.html' %}`.
-2. Nunca copie o bloco de paginação para dentro de um template de lista. Toda
-   mudança de visual ou de comportamento é feita no `paginacao.html`.
-3. A lista continua percorrendo `object_list`, que já vem só com a página atual.
+   `{% include 'website/_paginacao.html' %}`.
+2. Nunca copie o bloco de paginação para dentro de um template de lista.
+3. Nunca monte link de página à mão (`?page={{ ... }}`): use
+   `{% url_com_parametros page=... %}`, senão os filtros se perdem.
+4. A lista percorre `object_list` (ou o `context_object_name`), que já vem
+   só com a página atual.
+5. Tabela paginada no servidor **não** usa DataTables.
+
+## Testes
+
+```python
+response = c.get(url, {'status': 'PENDENTE', 'cliente__nome': 'silva'})
+self.assertContains(response, 'Página 1 de 2')
+self.assertContains(response, 'href="?status=PENDENTE&amp;cliente__nome=silva&amp;page=2" rel="next">Próxima</a>')
+```
+
+(O `&` sai como `&amp;` no HTML por causa do autoescape — o navegador lê `&`.)
 
 ## Conferência antes de terminar
 
-1. Com mais registros do que o `paginate_by`, aparecem "Página 1 de N" e o link
-   "Próxima"; na última página, só "Anterior".
-2. Se a URL tem parâmetros de busca, eles continuam na URL depois de trocar de página.
+1. Com mais registros do que o `paginate_by`, aparecem os números, "Próxima"
+   e "Página 1 de N"; na última página, "Próxima" fica desabilitado.
+2. Com filtros na URL, trocar de página mantém todos eles.
 3. O terminal do `runserver` não mostra `UnorderedObjectListWarning`.

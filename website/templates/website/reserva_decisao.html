@@ -24,7 +24,9 @@
             Outros pedidos pendentes no mesmo período serão recusados automaticamente.
           </div>
         {% endif %}
-        <form method="post">
+        <form method="post"
+              data-confirmar="{% if aprovar %}Deseja aprovar o pedido de {{ reserva.cliente.nome }}?{% else %}Deseja recusar o pedido de {{ reserva.cliente.nome }}?{% endif %}"
+              data-confirmar-classe="{% if aprovar %}btn-success{% else %}btn-danger{% endif %}">
           {% csrf_token %}
           {{ form|crispy }}
           <div class="d-flex gap-2 mt-3">

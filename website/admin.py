@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Administrador, Chacara, Cliente, HistoricoReserva, Reserva, UsoIA
+from .models import Administrador, Avaliacao, Chacara, Cliente, HistoricoReserva, Reserva
 
 
 @admin.register(Cliente)
@@ -60,12 +60,12 @@ class HistoricoReservaAdmin(admin.ModelAdmin):
     list_select_related = ['reserva__cliente', 'reserva__chacara', 'alterado_por']
 
 
-@admin.register(UsoIA)
-class UsoIAAdmin(admin.ModelAdmin):
-    list_display = ['data', 'tipo', 'tokens_entrada', 'tokens_saida', 'custo_usd', 'usuario', 'reserva']
-    list_filter = ['tipo']
-    date_hierarchy = 'data'
-    readonly_fields = ['custo_usd', 'data']
-    # Evita N+1: as colunas "usuario" e "reserva" (o __str__ da reserva lê
-    # cliente e chácara) fariam várias consultas por linha.
-    list_select_related = ['usuario', 'reserva__cliente', 'reserva__chacara']
+@admin.register(Avaliacao)
+class AvaliacaoAdmin(admin.ModelAdmin):
+    list_display = ['reserva', 'usuario', 'nota', 'criado_em']
+    list_filter = ['nota']
+    search_fields = ['usuario__username', 'comentario']
+    readonly_fields = ['criado_em', 'atualizado_em']
+    # Evita N+1: o __str__ da reserva lê cliente e chácara, e a coluna
+    # "usuario" lê o User.
+    list_select_related = ['reserva__cliente', 'reserva__chacara', 'usuario']

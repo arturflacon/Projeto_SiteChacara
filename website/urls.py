@@ -23,8 +23,10 @@ from .views import (
     AdministradorCreate,
     # Cliente
     ClienteUpdate,
-    # IA (Gemini)
-    ChatbotMensagemView, ChatbotLimparView, ReanalisarPedidoView, UsoIAListView,
+    # Avaliações (registros por usuário)
+    MinhasAvaliacoesList, AvaliacaoDetail, AvaliacaoCreate, AvaliacaoUpdate, AvaliacaoDelete,
+    # IA — análise do pedido
+    ReanalisarPedidoView,
 )
 
 urlpatterns = [
@@ -39,10 +41,10 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('cadastro/', SignupView.as_view(), name='signup'),
     path('senha/alterar/', auth_views.PasswordChangeView.as_view(
-        template_name='registration/password_change_form.html',
+        template_name='website/senha_alterar.html',
         success_url=reverse_lazy('password_change_done')), name='password_change'),
     path('senha/alterar/concluido/', auth_views.PasswordChangeDoneView.as_view(
-        template_name='registration/password_change_done.html'), name='password_change_done'),
+        template_name='website/senha_alterada.html'), name='password_change_done'),
 
     # --- Reservas (cliente) ---
     path('reservas/nova/', ReservaCreate.as_view(), name='reserva_create'),
@@ -50,6 +52,13 @@ urlpatterns = [
     path('reservas/minhas/<int:pk>/', MinhaReservaDetailView.as_view(), name='minha_reserva_detail'),
     path('reservas/minhas/<int:pk>/editar/', MinhaReservaUpdateView.as_view(), name='minha_reserva_update'),
     path('reservas/minhas/<int:pk>/cancelar/', MinhaReservaDeleteView.as_view(), name='minha_reserva_delete'),
+
+    # --- Avaliações (cliente — só as próprias) ---
+    path('avaliacoes/', MinhasAvaliacoesList.as_view(), name='minhas_avaliacoes'),
+    path('avaliacoes/nova/', AvaliacaoCreate.as_view(), name='avaliacao_create'),
+    path('avaliacoes/<int:pk>/', AvaliacaoDetail.as_view(), name='avaliacao_detail'),
+    path('avaliacoes/<int:pk>/editar/', AvaliacaoUpdate.as_view(), name='avaliacao_update'),
+    path('avaliacoes/<int:pk>/excluir/', AvaliacaoDelete.as_view(), name='avaliacao_delete'),
 
     # --- Reservas (admin) ---
     path('reservas/pendentes/', PedidosPendentesListView.as_view(), name='pedidos_pendentes'),
@@ -69,9 +78,4 @@ urlpatterns = [
 
     # --- Cliente ---
     path('cliente/<int:pk>/editar/', ClienteUpdate.as_view(), name='cliente_update'),
-
-    # --- IA (Gemini) ---
-    path('ia/chat/', ChatbotMensagemView.as_view(), name='chatbot_mensagem'),
-    path('ia/chat/limpar/', ChatbotLimparView.as_view(), name='chatbot_limpar'),
-    path('ia/uso/', UsoIAListView.as_view(), name='uso_ia'),
 ]

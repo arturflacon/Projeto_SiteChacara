@@ -1,0 +1,61 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}IA por Usuário — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h2 class="fw-display mb-0"><i class="bi bi-people me-2 text-primary"></i>IA por Usuário</h2>
+  <a href="{% url 'ia:configuracao' %}" class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-sliders me-1"></i>Cota padrão: {{ config.cota_mensal_padrao_tokens }} tokens/mês
+  </a>
+</div>
+<p class="text-secondary small mb-4">
+  Consumo do mês corrente no assistente e no bot (análises de pedido e testes não contam).
+  Use a busca e clique nos cabeçalhos para ordenar.
+</p>
+
+{# DataTables: esta tabela mostra todos os usuários de uma vez (sem paginação no servidor). #}
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle table-datatable">
+    <thead class="table-light">
+      <tr>
+        <th>Usuário</th>
+        <th>Nome</th>
+        <th>Perfil</th>
+        <th>IA</th>
+        <th class="text-end">Consumo do mês</th>
+        <th class="text-end">Cota</th>
+        <th style="min-width: 9rem;">Uso</th>
+        <th class="text-end" data-orderable="false" data-searchable="false">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in usuarios %}
+      <tr>
+        <td><strong>{{ u.username }}</strong></td>
+        <td>{% if u.cliente %}{{ u.cliente.nome }}{% elif u.administrador %}{{ u.administrador.nome }}{% else %}{{ u.get_full_name|default:"—" }}{% endif %}</td>
+        <td>{% if u.is_superuser or u.administrador %}<span class="badge bg-primary">Admin</span>{% elif u.cliente %}<span class="badge bg-light text-dark border">Cliente</span>{% else %}<span class="text-secondary">—</span>{% endif %}</td>
+        <td data-order="{{ u.ia_habilitada|yesno:'1,0' }}">
+          {% if u.ia_habilitada %}<span class="badge bg-success">Habilitada</span>{% else %}<span class="badge bg-danger">Bloqueada</span>{% endif %}
+        </td>
+        <td class="text-end" data-order="{{ u.consumo_mes }}">{{ u.consumo_mes }}</td>
+        <td class="text-end" data-order="{{ u.cota_efetiva }}">
+          {{ u.cota_efetiva }}{% if not u.cota_propria %} <span class="text-secondary small">(padrão)</span>{% endif %}
+        </td>
+        <td data-order="{% if u.cota_efetiva %}{% widthratio u.consumo_mes u.cota_efetiva 100 %}{% else %}100{% endif %}">
+          <div class="progress" role="progressbar" style="height: .6rem;" aria-label="Uso da cota">
+            <div class="progress-bar {% if u.consumo_mes >= u.cota_efetiva %}bg-danger{% endif %}"
+                 style="width: {% if u.cota_efetiva %}{% widthratio u.consumo_mes u.cota_efetiva 100 %}{% else %}100{% endif %}%;"></div>
+          </div>
+        </td>
+        <td class="text-end">
+          <a href="{% url 'ia:perfil_update' u.pk %}" class="btn btn-sm btn-outline-primary" title="Editar uso da IA">
+            <i class="bi bi-pencil"></i>
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

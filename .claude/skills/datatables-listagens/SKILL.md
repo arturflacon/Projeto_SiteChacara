@@ -1,63 +1,52 @@
 ---
 name: datatables-listagens
-description: Use sempre que for criar ou editar um template de listagem neste projeto Django — ListView, template *_list.html ou qualquer <table> que mostre registros de um queryset — para que toda lista use o DataTables do mesmo jeito: em português, com o tema do Bootstrap 5, busca e ordenação por coluna, sem paginação duplicada e com moeda e data brasileiras ordenando certo via data-sort.
+description: Use ao criar ou editar uma tabela que mostra TODOS os registros de uma vez, sem paginação nem filtro no servidor (ex.: "IA por usuário") — para usar o DataTables já carregado no modelo.html, em português e com o tema do Bootstrap 5. Não use em listas paginadas pelo Django.
 ---
 
-## Antes de mexer em qualquer template
+## Quando usar (e quando NÃO usar)
 
-Confira se a base já está instalada. Se faltar algo, instale primeiro, uma única vez:
+- **Use** em tabelas cuja view entrega todos os registros de uma vez (sem
+  `paginate_by` e sem `FilterSet`), em que buscar/ordenar no navegador faz
+  sentido. Exemplo no projeto: **IA → IA por usuário** (`ia/templates/ia/usuarios_ia.html`).
+- **Não use** em listas paginadas ou filtradas no servidor (Minhas Reservas,
+  Pedidos Pendentes, Todas as Reservas, Disponibilidade, Requisições da IA):
+  lá o DataTables buscaria e ordenaria só a página atual, enganando o
+  usuário. Essas listas seguem as skills `django-paginacao` e `django-filter-listagens`.
 
-1. No `base.html`, depois do Bootstrap 5:
-   - CSS no `<head>`: `https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css`
-   - JS antes de `</body>`, nesta ordem: jQuery 3.7.1
-     (`https://code.jquery.com/jquery-3.7.1.min.js`), depois
-     `https://cdn.datatables.net/2.1.8/js/dataTables.min.js` e
-     `https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js`.
-   - Se o projeto já carrega jQuery (por causa de Bootbox, jQuery Mask...), não
-     carregue de novo: jQuery aparece uma única vez, antes de tudo que depende dele.
-2. `static/js/datatables-init.js` existe com exatamente este conteúdo e está incluído
-   no `base.html` com `{% static %}`, depois dos scripts do DataTables:
+## A base (já existe — não recrie)
 
-   ```javascript
-   // Transforma toda <table class="table-datatable"> do projeto em DataTable,
-   // sempre com a mesma configuração — é isso que deixa todas as listas iguais.
-   $(document).ready(function () {
-     $('table.table-datatable').each(function () {
-       $(this).DataTable({
-         paging: false,      // o Django já pagina a queryset no servidor
-         info: false,        // redundante com a paginação do Django
-         lengthChange: false,
-         order: [],          // mantém a ordem da view até o usuário clicar
-         language: { url: 'https://cdn.datatables.net/plug-ins/2.1.8/i18n/pt-BR.json' }
-       });
-     });
-   });
-   ```
+- `website/templates/website/modelo.html` carrega, do cdnjs e com versão fixa:
+  CSS `datatables.net-bs5/2.1.8/dataTables.bootstrap5.min.css` no `<head>` e,
+  no fim do `<body>`, jQuery 3.7.1 → `datatables.net/2.1.8/dataTables.min.js`
+  → `datatables.net-bs5/2.1.8/dataTables.bootstrap5.min.js` → Bootstrap → `static/js/site.js`.
+- `static/js/site.js` inicializa toda `<table class="table-datatable">` com a
+  mesma configuração: 10 por página, busca, ordenação, tradução pt-BR inline.
+- Não carregue o DataTables de novo num template nem chame `.DataTable(...)`
+  fora do `site.js`.
 
-## Padrão de toda tabela de listagem
+## Padrão da tabela
 
-1. A tabela é sempre
-   `<table class="table table-striped table-hover align-middle table-datatable">`
-   com `<thead class="table-light">`. Não invente outras classes nem estilos por tabela.
-2. Nunca chame `.DataTable(...)` dentro de um template. A única inicialização é a do
-   `datatables-init.js`.
-3. Nunca ligue a paginação do DataTables. O bloco `{% if is_paginated %}` do Django
-   continua como está, logo depois da tabela.
-4. Coluna de data: exibe no padrão brasileiro e ordena pelo `data-sort` em ISO.
-   - `DateField`: `<td data-sort="{{ obj.campo|date:'Y-m-d' }}">{{ obj.campo|date:"d/m/Y" }}</td>`
-   - `DateTimeField`: `<td data-sort="{{ obj.campo|date:'Y-m-d H:i' }}">{{ obj.campo|date:"d/m/Y H:i" }}</td>`
-5. Coluna de moeda:
-   `<td data-sort="{{ obj.valor|stringformat:'.2f' }}">R$ {{ obj.valor|floatformat:"2g" }}</td>`.
-   Outros números exibidos com vírgula decimal (quantidade, percentual) também levam
-   `data-sort` com `stringformat`.
-6. Dentro de `data-sort="..."`, o argumento do filtro usa aspas simples (`'Y-m-d'`)
-   para não fechar o atributo HTML.
-7. Coluna de ações (Editar, Excluir, Ver) e qualquer coluna sem valor para ordenar:
-   `<th data-orderable="false" data-searchable="false">Ações</th>`.
-8. Lista vazia: nunca use `{% empty %}` com uma linha `<td colspan="...">` dentro do
-   `<tbody>` de uma `table-datatable`. Isso quebra o DataTables. Deixe o `<tbody>`
-   vazio; o DataTables mostra "Nenhum registro encontrado" em português.
-9. Todo `<tr>` do `<tbody>` tem exatamente uma `<td>` por `<th>` do cabeçalho, sem
-   `colspan` nem `rowspan`, e o `<thead>` tem uma única linha.
-10. Cabeçalhos em português, com o nome que o usuário entende ("Cadastrado em", não
-    "data_cadastro").
+1. `<table class="table table-striped table-hover align-middle table-datatable">`
+   com `<thead class="table-light">` de uma única linha.
+2. A view **não** pagina (`paginate_by` ausente) e não inclui `_paginacao.html`.
+   Se a quantidade de linhas puder crescer muito (milhares), não é caso de
+   DataTables: pagine no servidor.
+3. A view entrega tudo que a tabela mostra numa consulta só
+   (`annotate`/`select_related`) — nada de query por linha.
+4. Data: exibe no padrão brasileiro e ordena pelo ISO:
+   `<td data-order="{{ obj.campo|date:'Y-m-d' }}">{{ obj.campo|date:"d/m/Y" }}</td>`.
+5. Número com separador brasileiro (moeda, tokens): `data-order` com o valor puro
+   (`{{ obj.valor|stringformat:'d' }}` ou `'.2f'`).
+6. Coluna de ações: `<th data-orderable="false" data-searchable="false">Ações</th>`.
+7. Lista vazia: deixe o `<tbody>` vazio (sem `{% empty %}` com `colspan`) — o
+   DataTables mostra "Nenhum registro encontrado". Toda linha tem exatamente
+   uma `<td>` por `<th>`, sem `colspan`/`rowspan`.
+8. Cabeçalhos em português, com o nome que o usuário entende.
+
+## Testes
+
+- A página tem `table-datatable` e a view não pagina (`is_paginated` ausente/False).
+- As listas paginadas continuam **sem** `table-datatable`
+  (`website.tests.PluginsJQueryTest`).
+- Conferência no navegador: aparece a caixa "Buscar:", a paginação do
+  DataTables em português e a ordenação por coluna funciona.

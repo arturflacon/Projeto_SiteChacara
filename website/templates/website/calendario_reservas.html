@@ -4,7 +4,6 @@
 {% block title %}Disponibilidade — Sítio de Lurdes{% endblock %}
 
 {% block extra_css %}
-{% include 'website/datatables-css.html' %}
 <style>
   /* FullCalendar com a paleta do site */
   #calendario {
@@ -50,12 +49,12 @@
 
 {% if reservas %}
   <div class="table-responsive">
-    <table class="table table-striped table-hover align-middle table-datatable">
+    <table class="table table-striped table-hover align-middle">
       <thead class="table-light">
         <tr>
           <th>Entrada</th>
           <th>Saída</th>
-          {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+          {% if eh_admin %}
           <th>Cliente</th>
           <th>Telefone</th>
           {% endif %}
@@ -64,9 +63,9 @@
       <tbody>
         {% for r in reservas %}
         <tr>
-          <td data-sort="{{ r.data_inicio|date:'Y-m-d' }}">{{ r.data_inicio|date:"d/m/Y" }}</td>
-          <td data-sort="{{ r.data_fim|date:'Y-m-d' }}">{{ r.data_fim|date:"d/m/Y" }}</td>
-          {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+          <td>{{ r.data_inicio|date:"d/m/Y" }}</td>
+          <td>{{ r.data_fim|date:"d/m/Y" }}</td>
+          {% if eh_admin %}
           <td><strong>{{ r.cliente.nome }}</strong></td>
           <td class="text-nowrap">
             <a href="tel:{{ r.cliente.telefone }}" class="text-decoration-none">
@@ -80,7 +79,7 @@
     </table>
   </div>
 
-  {% include 'website/paginacao.html' %}
+  {% include 'website/_paginacao.html' %}
 {% elif filter.is_bound %}
   <div class="alert alert-success">
     <i class="bi bi-check-circle me-2"></i>
@@ -97,7 +96,6 @@
 {% endblock %}
 
 {% block extra_js %}
-{% include 'website/datatables-js.html' %}
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/pt-br.global.min.js"></script>
 <script>

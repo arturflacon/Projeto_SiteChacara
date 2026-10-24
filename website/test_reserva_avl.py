@@ -23,7 +23,7 @@ Execução:
     python manage.py test website.test_reserva_avl -v 2
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
@@ -34,23 +34,30 @@ from .models import Chacara, Cliente, Reserva
 
 # ---------------------------------------------------------------------------
 # Dados de teste definidos na seção 6 do Plano de Testes
+#
+# As datas do plano original (out/nov de 2026) eram fixas e passaram a cair
+# no passado, onde o formulário recusa qualquer pedido. Agora elas são
+# relativas a hoje, mantendo exatamente as mesmas distâncias entre si — os
+# limites testados (0 dia de duração e início da confirmada) não mudam.
 # ---------------------------------------------------------------------------
 
 PRECO_DIARIA = Decimal('500.00')          # P
 
+REFERENCIA = date.today() + timedelta(days=30)
+
 # Limite 1 — duração da reserva igual a 0 dias (chegada fixa)
-CHEGADA_L1 = date(2026, 11, 1)
-SAIDA_MENOS_1 = date(2026, 10, 31)        # imediatamente abaixo do limite
-SAIDA_LIMITE_0 = date(2026, 11, 1)        # no limite
-SAIDA_MAIS_1 = date(2026, 11, 2)          # imediatamente acima do limite
+CHEGADA_L1 = REFERENCIA + timedelta(days=27)
+SAIDA_MENOS_1 = CHEGADA_L1 - timedelta(days=1)   # imediatamente abaixo do limite
+SAIDA_LIMITE_0 = CHEGADA_L1                      # no limite
+SAIDA_MAIS_1 = CHEGADA_L1 + timedelta(days=1)    # imediatamente acima do limite
 
 # Limite 2 — início da reserva confirmada de referência (chegada fixa)
-CONFIRMADA_INICIO = date(2026, 10, 10)
-CONFIRMADA_FIM = date(2026, 10, 15)
-CHEGADA_L2 = date(2026, 10, 5)
-SAIDA_ABAIXO = date(2026, 10, 9)          # imediatamente abaixo do limite
-SAIDA_NO_LIMITE = date(2026, 10, 10)      # no limite
-SAIDA_ACIMA = date(2026, 10, 11)          # imediatamente acima do limite
+CONFIRMADA_INICIO = REFERENCIA + timedelta(days=5)
+CONFIRMADA_FIM = REFERENCIA + timedelta(days=10)
+CHEGADA_L2 = REFERENCIA
+SAIDA_ABAIXO = CONFIRMADA_INICIO - timedelta(days=1)   # imediatamente abaixo do limite
+SAIDA_NO_LIMITE = CONFIRMADA_INICIO                    # no limite
+SAIDA_ACIMA = CONFIRMADA_INICIO + timedelta(days=1)    # imediatamente acima do limite
 
 
 class BaseReservaAVL(TestCase):
@@ -166,7 +173,7 @@ class BaseReservaAVL(TestCase):
 # ---------------------------------------------------------------------------
 
 class CT01SaidaAnteriorAChegada(BaseReservaAVL):
-    """CT01 — chegada 01/11/2026, saída 31/10/2026 (-1 dia).
+    """CT01 — saída 1 dia antes da chegada (-1 dia).
 
     Resultado esperado: pedido recusado, com a mensagem indicando que a data
     de saída não pode ser anterior à data de chegada.
@@ -182,7 +189,7 @@ class CT01SaidaAnteriorAChegada(BaseReservaAVL):
 
 
 class CT02SaidaIgualAChegada(BaseReservaAVL):
-    """CT02 — chegada 01/11/2026, saída 01/11/2026 (0 dias).
+    """CT02 — saída no mesmo dia da chegada (0 dias).
 
     Resultado esperado: pedido recusado, pois a reserva deve ter no mínimo
     uma diária.
@@ -195,7 +202,7 @@ class CT02SaidaIgualAChegada(BaseReservaAVL):
 
 
 class CT03UmaDiaria(BaseReservaAVL):
-    """CT03 — chegada 01/11/2026, saída 02/11/2026 (+1 dia).
+    """CT03 — saída 1 dia depois da chegada (+1 dia).
 
     Resultado esperado: pedido aceito, status Pendente, valor P x 1.
     """
@@ -207,11 +214,11 @@ class CT03UmaDiaria(BaseReservaAVL):
 
 
 # ---------------------------------------------------------------------------
-# Limite 2 — início da reserva confirmada de referência (10/10/2026)
+# Limite 2 — início da reserva confirmada de referência
 # ---------------------------------------------------------------------------
 
 class CT04SaidaAntesDoInicioDaConfirmada(BaseReservaAVL):
-    """CT04 — 05/10/2026 a 09/10/2026 (imediatamente abaixo do limite).
+    """CT04 — saída 1 dia antes do início da confirmada (imediatamente abaixo do limite).
 
     Resultado esperado: pedido aceito, status Pendente, valor P x 4.
     """
@@ -224,7 +231,7 @@ class CT04SaidaAntesDoInicioDaConfirmada(BaseReservaAVL):
 
 
 class CT05SaidaNoInicioDaConfirmada(BaseReservaAVL):
-    """CT05 — 05/10/2026 a 10/10/2026 (no limite).
+    """CT05 — saída no dia de início da confirmada (no limite).
 
     Resultado esperado: pedido aceito, status Pendente, valor P x 5.
     O dia de saída pode coincidir com o dia de chegada da reserva confirmada.
@@ -238,7 +245,7 @@ class CT05SaidaNoInicioDaConfirmada(BaseReservaAVL):
 
 
 class CT06SaidaDepoisDoInicioDaConfirmada(BaseReservaAVL):
-    """CT06 — 05/10/2026 a 11/10/2026 (imediatamente acima do limite).
+    """CT06 — saída 1 dia depois do início da confirmada (imediatamente acima do limite).
 
     Resultado esperado: pedido recusado por conflito com reserva confirmada.
     """
@@ -248,6 +255,6 @@ class CT06SaidaDepoisDoInicioDaConfirmada(BaseReservaAVL):
         self.assertFormularioExibido(self.abrir_formulario())
         response = self.enviar_pedido(CHEGADA_L2, SAIDA_ACIMA)
         self.assertPedidoRecusado(
-            response, CHEGADA_L2, SAIDA_ACIMA,  
+            response, CHEGADA_L2, SAIDA_ACIMA,
             mensagem='Já existe uma reserva confirmada nesse período',
         )

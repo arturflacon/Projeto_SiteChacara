@@ -1,8 +1,7 @@
-{% load sitio_tags %}
 {# Botão "Fazer pedido": só clientes (ou visitantes) fazem pedidos; admin vê o atalho para os pendentes. #}
 {# Uso: {% include 'website/botao-pedido.html' with classe="btn btn-primary" icone="bi-calendar-plus" texto="Fazer Pedido" %} #}
 {% if user.is_authenticated and not user.cliente %}
-  {% if user.is_superuser or user.administrador or user|pertence:"Administradores" %}
+  {% if eh_admin %}
     <a href="{% url 'pedidos_pendentes' %}" class="{{ classe }}">
       <i class="bi bi-hourglass-split me-1"></i>Ver pedidos pendentes
     </a>

@@ -1,0 +1,64 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}Meu Consumo de IA — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <h2 class="fw-display mb-4"><i class="bi bi-speedometer2 me-2 text-primary"></i>Meu Consumo de IA</h2>
+
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body p-4">
+        {% if not habilitado %}
+          <div class="alert alert-warning small"><i class="bi bi-slash-circle me-1"></i>O uso da IA está desabilitado para a sua conta.</div>
+        {% elif not ia_disponivel %}
+          <div class="alert alert-secondary small"><i class="bi bi-cloud-slash me-1"></i>A IA está indisponível no momento.</div>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-2">
+          <div>
+            <small class="text-secondary d-block">Usado neste mês</small>
+            <span class="fs-3 fw-bold">{{ consumo }}</span> <span class="text-secondary">de {{ cota }} tokens</span>
+          </div>
+          <span class="text-secondary small">Restam {{ restante }} tokens · renova no dia 1º</span>
+        </div>
+        <div class="progress" role="progressbar" aria-label="Uso da cota mensal"
+             aria-valuenow="{{ percentual }}" aria-valuemin="0" aria-valuemax="100" style="height: 1rem;">
+          <div class="progress-bar {% if percentual >= 100 %}bg-danger{% elif percentual >= 80 %}bg-warning{% endif %}"
+               style="width: {{ percentual }}%;">{{ percentual }}%</div>
+        </div>
+        <p class="small text-secondary mt-3 mb-0">
+          Contam as perguntas feitas ao assistente do site e ao bot do Telegram. Cada pergunta gasta tokens
+          com o texto enviado (incluindo as últimas mensagens da conversa) e com a resposta.
+        </p>
+      </div>
+    </div>
+
+    <h5 class="fw-display mb-3">Minhas últimas perguntas</h5>
+    {% if ultimas %}
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead class="table-light">
+            <tr><th>Data</th><th>Onde</th><th>Pergunta</th><th class="text-end">Tokens</th><th>Resultado</th></tr>
+          </thead>
+          <tbody>
+            {% for r in ultimas %}
+            <tr>
+              <td class="small text-nowrap">{{ r.criado_em|date:"d/m/Y H:i" }}</td>
+              <td class="small">{{ r.get_origem_display }}</td>
+              <td class="small">{{ r.prompt|truncatechars:80 }}</td>
+              <td class="text-end">{{ r.tokens_total }}</td>
+              <td>{% if r.sucesso %}<span class="badge bg-success">OK</span>{% else %}<span class="badge bg-danger">Erro</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info small">
+        <i class="bi bi-info-circle me-1"></i>Você ainda não usou a IA neste site.
+        <a href="{% url 'assistente:conversa' %}">Fazer uma pergunta ao assistente</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

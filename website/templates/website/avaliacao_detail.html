@@ -1,0 +1,50 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}Avaliação — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2 class="fw-display mb-0"><i class="bi bi-star me-2 text-primary"></i>Minha Avaliação</h2>
+      <a href="{% url 'minhas_avaliacoes' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Voltar
+      </a>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+          <div>
+            <h4 class="fw-display mb-1">{{ avaliacao.reserva.chacara.nome }}</h4>
+            <span class="text-secondary small">
+              Estadia de {{ avaliacao.reserva.data_inicio|date:"d/m/Y" }} a {{ avaliacao.reserva.data_fim|date:"d/m/Y" }}
+            </span>
+          </div>
+          <div class="text-end">
+            <div class="fs-4">{% include 'website/_estrelas.html' with nota=avaliacao.nota %}</div>
+            <small class="text-secondary">{{ avaliacao.get_nota_display }}</small>
+          </div>
+        </div>
+        <hr>
+        <h6 class="fw-semibold">Comentário</h6>
+        <p class="mb-4">{{ avaliacao.comentario|default:"Sem comentário."|linebreaksbr }}</p>
+        <p class="small text-secondary mb-4">
+          <i class="bi bi-clock-history me-1"></i>Enviada em {{ avaliacao.criado_em|date:"d/m/Y H:i" }}
+          {% if avaliacao.atualizado_em|date:"YmdHi" != avaliacao.criado_em|date:"YmdHi" %}
+            · atualizada em {{ avaliacao.atualizado_em|date:"d/m/Y H:i" }}
+          {% endif %}
+        </p>
+        <div class="d-flex gap-2">
+          <a href="{% url 'avaliacao_update' avaliacao.pk %}" class="btn btn-outline-primary">
+            <i class="bi bi-pencil me-1"></i>Editar
+          </a>
+          <a href="{% url 'avaliacao_delete' avaliacao.pk %}" class="btn btn-outline-danger">
+            <i class="bi bi-trash me-1"></i>Excluir
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

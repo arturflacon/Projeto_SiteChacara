@@ -1,0 +1,32 @@
+{% extends "website/modelo.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}IA de {{ object.usuario.username }} — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card shadow-sm border-0 rounded-3">
+      <div class="card-header bg-primary text-white py-3">
+        <h4 class="mb-0 fw-display"><i class="bi bi-person-gear me-2"></i>IA de {{ object.usuario.username }}</h4>
+      </div>
+      <div class="card-body p-4">
+        <p class="small text-secondary">
+          Consumo neste mês: <strong>{{ consumo }}</strong> tokens.
+          Cota padrão: {{ config.cota_mensal_padrao_tokens }} tokens/mês.
+        </p>
+        <form method="post">
+          {% csrf_token %}
+          {{ form|crispy }}
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-circle me-1"></i>Salvar
+            </button>
+            <a href="{% url 'ia:usuarios' %}" class="btn btn-outline-secondary px-4">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

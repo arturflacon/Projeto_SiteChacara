@@ -78,6 +78,23 @@
     /* Primary */
     .btn-primary, .bg-primary, .badge.bg-primary { background-color: var(--cp-primary) !important; border-color: var(--cp-primary) !important; }
     .btn-primary:hover                            { background-color: var(--petrol-dark) !important; border-color: var(--petrol-dark) !important; }
+
+    /* Navbar: itens numa linha só. Entre 1200 e 1399px (navbar aberta, mas
+       estreita) os ícones somem para caber; no celular e em telas largas voltam. */
+    .navbar-petrol .navbar-nav .nav-link { white-space: nowrap; }
+    @media (min-width: 1200px) and (max-width: 1399.98px) {
+      .navbar-petrol .navbar-nav > .nav-item > .nav-link > .bi { display: none; }
+    }
+
+    /* Paginação (Django e DataTables) na paleta petróleo */
+    .pagination {
+      --bs-pagination-color: var(--petrol);
+      --bs-pagination-hover-color: var(--petrol-dark);
+      --bs-pagination-focus-color: var(--petrol-dark);
+      --bs-pagination-active-bg: var(--petrol);
+      --bs-pagination-active-border-color: var(--petrol);
+      --bs-pagination-focus-box-shadow: 0 0 0 .25rem rgba(var(--cp-primary-rgb), .25);
+    }
     .btn-outline-primary                          { color: var(--cp-primary) !important; border-color: var(--cp-primary) !important; }
     .btn-outline-primary:hover                    { background-color: var(--cp-primary) !important; color: #fff !important; }
     .text-primary, a.link-primary                 { color: var(--cp-primary) !important; }
@@ -310,6 +327,8 @@
     .bg-surface-alt { background-color: var(--surface-alt) !important; }
     .fw-display { font-family: var(--font-display); font-weight: 700; }
     .border-white-10 { border-color: rgba(255,255,255,.1) !important; }
+    /* O Bootstrap só tem .text-white-50; esta é a versão mais legível sobre fundo escuro */
+    .text-white-75 { color: rgba(255,255,255,.75) !important; }
     .bg-petrol { background-color: var(--petrol) !important; }
     .bg-petrol-darker { background-color: var(--petrol-darker) !important; }
     .bg-petrol-subtle { background-color: var(--petrol-subtle) !important; }
@@ -323,27 +342,14 @@
     table.dataTable th.dt-type-date,
     table.dataTable td.dt-type-date { text-align: left; }
 
-    /* ─── ASSISTENTE VIRTUAL (Gemini) ─── */
-    .chatbot-botao {
-      position: fixed;
-      right: 1.25rem;
-      bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
-      width: 3.5rem;
-      height: 3.5rem;
-      z-index: 1040;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    /* Os toasts sobem para não ficarem atrás do botão do chat */
-    .toast-acima-do-chat { margin-bottom: 4.5rem; }
-
-    .chatbot { --bs-offcanvas-width: 400px; }
-    .chatbot-mensagens {
+    /* ─── BALÕES DE CONVERSA (assistente) ─── */
+    .chat-mensagens {
       overflow-y: auto;
       background: var(--surface);
       display: flex;
       flex-direction: column;
+      height: 60vh;
+      min-height: 320px;
     }
     .chat-balao {
       max-width: 85%;
@@ -367,11 +373,18 @@
       color: var(--text-body);
       border: 1px solid var(--border-color);
       border-bottom-left-radius: .25rem;
+      white-space: normal;          /* a resposta já vem em HTML (Markdown sanitizado) */
     }
+    .chat-model p,
+    .chat-model ul,
+    .chat-model ol { margin-bottom: .5rem; }
+    .chat-model > :last-child { margin-bottom: 0; }
+    .chat-model ul,
+    .chat-model ol { padding-left: 1.25rem; }
+    .chat-model a { color: var(--petrol-dark); }
     .chat-erro {
       align-self: flex-start;
       background: rgba(var(--cp-danger-rgb), .08);
       color: var(--cp-danger);
       border: 1px solid rgba(var(--cp-danger-rgb), .25);
     }
-    .chatbot-aviso { font-size: .75rem; line-height: 1.35; }

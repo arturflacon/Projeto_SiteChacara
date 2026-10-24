@@ -1,0 +1,81 @@
+{% extends "website/modelo.html" %}
+
+{% block title %}Conectar Telegram — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <h2 class="fw-display mb-4"><i class="bi bi-telegram me-2 text-primary"></i>Conectar Telegram</h2>
+
+    {% if not bot_configurado %}
+      <div class="alert alert-secondary"><i class="bi bi-cloud-slash me-1"></i>O bot do Telegram ainda não está ativo neste servidor.</div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body p-4">
+        <h5 class="fw-display mb-3">Situação</h5>
+        {% if vinculo %}
+          <p class="mb-3">
+            <span class="badge bg-success me-2">Vinculado</span>
+            Conta do Telegram {% if vinculo.username %}<strong>@{{ vinculo.username }}</strong>{% endif %}
+            desde {{ vinculo.vinculado_em|date:"d/m/Y H:i" }}.
+          </p>
+          <form method="post" action="{% url 'telegram_bot:desvincular' %}" class="m-0"
+                data-confirmar="Desvincular sua conta do Telegram? O bot deixará de mostrar suas reservas."
+                data-confirmar-classe="btn-danger">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+              <i class="bi bi-x-circle me-1"></i>Desvincular
+            </button>
+          </form>
+        {% else %}
+          <p class="mb-0"><span class="badge bg-secondary me-2">Não vinculado</span>Gere um código abaixo para conectar.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body p-4">
+        <h5 class="fw-display mb-3">{% if vinculo %}Vincular outra conta do Telegram{% else %}Vincular{% endif %}</h5>
+        {% if codigo %}
+          <p class="small text-secondary mb-2">
+            Código de uso único, válido até {{ codigo.expira_em|date:"H:i" }} ({{ validade_minutos }} minutos):
+          </p>
+          <p class="fs-5 font-monospace bg-light rounded-2 p-2 text-break mb-3" id="codigo-vinculo">{{ codigo.codigo }}</p>
+          {% if deep_link %}
+            <a href="{{ deep_link }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary mb-3">
+              <i class="bi bi-telegram me-1"></i>Abrir no Telegram (@{{ bot_usuario }})
+            </a>
+            <p class="small text-secondary mb-1">O link abre a conversa com o bot e envia o código automaticamente.</p>
+          {% endif %}
+          <p class="small text-secondary mb-0">
+            Ou, na conversa com o bot, envie: <code>/vincular {{ codigo.codigo }}</code>
+          </p>
+        {% else %}
+          <p class="small text-secondary">
+            O código vale uma única vez e por {{ validade_minutos }} minutos. Gerar um novo invalida o anterior.
+          </p>
+          <form method="post" action="{% url 'telegram_bot:gerar_codigo' %}" class="m-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary" {% if not bot_configurado %}disabled{% endif %}>
+              <i class="bi bi-key me-1"></i>Gerar código
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4 small">
+        <h6 class="fw-semibold">O que dá para fazer pelo bot</h6>
+        <ul class="mb-0">
+          <li><code>/chacara</code> e <code>/disponibilidade</code> — informações e datas ocupadas</li>
+          <li><code>/minhasreservas</code> — seus pedidos, com botão para cancelar os pendentes</li>
+          <li><code>/perguntar</code> — dúvidas para o assistente (conta na sua cota de IA)</li>
+          {% if eh_admin %}<li><code>/pendentes</code> — aprovar ou recusar pedidos com um toque</li>{% endif %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

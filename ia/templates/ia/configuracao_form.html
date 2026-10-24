@@ -1,0 +1,70 @@
+{% extends "website/modelo.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Configuração da IA — Sítio de Lurdes{% endblock %}
+
+{% block main %}
+<div class="row justify-content-center g-4">
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0 rounded-3">
+      <div class="card-header bg-primary text-white py-3">
+        <h4 class="mb-0 fw-display"><i class="bi bi-sliders me-2"></i>Configuração da IA</h4>
+      </div>
+      <div class="card-body p-4">
+        <form method="post">
+          {% csrf_token %}
+          {{ form|crispy }}
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-circle me-1"></i>Salvar Configuração
+            </button>
+            <a href="{% url 'ia:requisicoes' %}" class="btn btn-outline-secondary px-4">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card shadow-sm border-0 rounded-3 mb-4">
+      <div class="card-body p-4">
+        <h5 class="fw-display mb-3"><i class="bi bi-key me-2 text-primary"></i>Chave da API</h5>
+        {# Só o estado da chave: o valor nunca sai do servidor #}
+        <p class="mb-2">
+          Chave configurada:
+          {% if chave_configurada %}
+            <span class="badge bg-success" id="chave-configurada">Sim</span>
+          {% else %}
+            <span class="badge bg-danger" id="chave-configurada">Não</span>
+          {% endif %}
+        </p>
+        <p class="small text-secondary mb-0">
+          A chave fica só na variável de ambiente <code>GEMINI_API_KEY</code>
+          (<code>.env</code> local ou <code>env_variables</code> do <code>app.yaml</code>) e nunca é gravada no banco.
+        </p>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-3">
+      <div class="card-body p-4">
+        <h5 class="fw-display mb-3"><i class="bi bi-plug me-2 text-primary"></i>Testar conexão</h5>
+        <p class="small text-secondary">
+          Envia uma pergunta mínima ao modelo configurado (salve antes as alterações). Funciona mesmo com a IA
+          desativada e não conta na cota de ninguém. O resultado fica em <a href="{% url 'ia:requisicoes' %}?origem=TESTE">Requisições</a>.
+        </p>
+        <form method="post" action="{% url 'ia:testar_conexao' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-primary w-100" {% if not chave_configurada %}disabled{% endif %}>
+            <i class="bi bi-lightning-charge me-1"></i>Testar conexão
+          </button>
+        </form>
+        {% if object.atualizado_por %}
+          <p class="small text-secondary mt-3 mb-0">
+            Última alteração: {{ object.atualizado_em|date:"d/m/Y H:i" }} por {{ object.atualizado_por.username }}.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
