@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 from html import unescape
@@ -362,6 +363,24 @@ class PluginsJQueryTest(TestCase):
                 response = navegador.get(reverse(nome))
                 self.assertEqual(response.status_code, 200)
                 self.assertNotContains(response, 'table-datatable')
+
+    def test_calendario_inicializado_em_js_proprio(self):
+        response = Client().get(reverse('calendario_reservas'))
+        self.assertContains(response, '/static/js/calendario.js')
+        self.assertContains(response, 'id="eventos-data"')
+
+    def test_nenhum_template_tem_script_inline(self):
+        """Toda inicialização de JS fica em static/js/; nos templates só <script src=...>."""
+        from pathlib import Path
+
+        from django.conf import settings
+
+        script_inline = re.compile(r'<script(?![^>]*\bsrc=)[^>]*>', re.IGNORECASE)
+        templates = sorted(Path(settings.BASE_DIR).glob('*/templates/**/*.html'))
+        self.assertTrue(templates)
+        for caminho in templates:
+            with self.subTest(str(caminho.relative_to(settings.BASE_DIR))):
+                self.assertIsNone(script_inline.search(caminho.read_text(encoding='utf-8')))
 
 
 # ---------------------------------------------------------------------------

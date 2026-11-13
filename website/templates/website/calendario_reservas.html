@@ -1,5 +1,5 @@
 {% extends "website/modelo.html" %}
-{% load sitio_tags %}
+{% load static sitio_tags %}
 
 {% block title %}Disponibilidade — Sítio de Lurdes{% endblock %}
 
@@ -98,18 +98,5 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/pt-br.global.min.js"></script>
-<script>
-  // Calendário mensal com as reservas CONFIRMADAS (dados vindos da view via json_script).
-  $(function () {
-    var eventos = JSON.parse(document.getElementById('eventos-data').textContent);
-    var calendario = new FullCalendar.Calendar(document.getElementById('calendario'), {
-      initialView: 'dayGridMonth',
-      locale: 'pt-br',
-      height: 'auto',
-      headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
-      events: eventos
-    });
-    calendario.render();
-  });
-</script>
+<script src="{% static "js/calendario.js" %}"></script>
 {% endblock %}
