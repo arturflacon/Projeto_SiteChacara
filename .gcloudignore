@@ -16,3 +16,8 @@ db.sqlite3
 .env
 
 # Atenção: NÃO ignore app.yaml nem static_gcloud/ — o App Engine precisa deles!
+
+# Pacote de entrega da avaliação (não vai para o App Engine)
+entrega/
+scripts/
+app.yaml.example

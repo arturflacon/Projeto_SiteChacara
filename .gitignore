@@ -24,3 +24,6 @@ app.yaml
 
 # Saída do collectstatic (gerada automaticamente)
 static_gcloud/
+
+# Pacote de entrega gerado por scripts/gerar_entrega.py
+entrega/
