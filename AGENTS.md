@@ -43,6 +43,17 @@ Perfis:
 | Cliente | `user.cliente` existe | faz pedidos, vê/edita/cancela os seus, avalia, usa o assistente e o bot |
 | Admin | superuser, perfil `Administrador` ou grupo `Administradores` (`website.services.usuario_eh_admin`) | decide pedidos, edita reservas e a chácara, gerencia a IA |
 
+## 1.1 Stack
+
+| Camada | Tecnologia |
+| --- | --- |
+| Backend | Python 3.11+, Django 5.2 (somente CBVs), django-filter, django-crispy-forms + crispy-bootstrap5, django-braces, django-debug-toolbar (só `DEBUG=True`) |
+| Banco | SQLite local (sem `DATABASE_URL`); PostgreSQL no Neon em produção (`dj-database-url` + `psycopg2-binary`) |
+| Frontend | templates Django, Bootstrap 5.3, Bootstrap Icons, jQuery 3.7.1 + jQuery Mask, Bootbox.js, DataTables; FullCalendar 6 na Disponibilidade |
+| IA | Google Gemini via `google-genai` (só em `ia/provedores/gemini.py`); respostas em Markdown sanitizadas com `Markdown` + `nh3` |
+| Bot | API de bots do Telegram com `requests` (webhook) |
+| Deploy | Google App Engine Standard + `gunicorn`; estáticos em `static_gcloud/` |
+
 ## 2. Mapa do projeto
 
 ```
@@ -69,10 +80,16 @@ telegram_bot/          bot do Telegram via webhook (/telegram/webhook/)
   bot.py               comandos, botões inline, vínculo por código, limites por remetente
   views.py             webhook (segredo no cabeçalho), Conectar Telegram, log de mensagens
   management/commands/ configurar_webhook, info_webhook, remover_webhook
-static/                css/estilo.css (paleta petróleo), js/site.js, js/assistente.js
+static/                css/estilo.css (paleta petróleo), js/site.js (plugins jQuery),
+                       js/calendario.js (FullCalendar), js/assistente.js
 docs/                  requisitos.md, otimizacoes.md, deploy.md
+scripts/gerar_entrega.py  gera entrega/submissao.txt (código + git log) para a avaliação
+app.yaml.example       modelo do app.yaml de produção (o real fica fora do Git)
 .claude/skills/        skills dos agentes (ver seção 10)
 ```
+
+Nos templates não há `<script>` inline: toda inicialização de JS fica em
+`static/js/` (um teste em `website.tests.PluginsJQueryTest` confere).
 
 ## 3. Comandos (Windows + PowerShell)
 
@@ -91,7 +108,13 @@ python manage.py makemigrations --check
 python manage.py test               # suíte completa, sem internet
 python manage.py test website.tests.ServicesTest   # uma classe só
 
-python manage.py collectstatic --noinput   # gera static_gcloud/ (deploy)
+# Deploy (só a pessoa responsável executa — ver seção 9)
+Copy-Item app.yaml.example app.yaml        # uma vez; preencha os valores reais
+python manage.py collectstatic --noinput   # gera static_gcloud/
+gcloud app deploy
+
+# Pacote de entrega da avaliação (gera entrega/submissao.txt, fora do Git)
+python scripts/gerar_entrega.py
 
 # Telegram (com TELEGRAM_BOT_TOKEN e TELEGRAM_WEBHOOK_SECRET no .env)
 python manage.py configurar_webhook --url https://<domínio>/telegram/webhook/
@@ -117,7 +140,15 @@ Sem a venv ativada, use `.\.venv\Scripts\python.exe manage.py ...`.
   `website/form-filter.html` e paginação `website/_paginacao.html`.
 - **jQuery:** plugins carregados no `modelo.html` (cdnjs, versões fixas) e
   inicializados em `static/js/site.js` (máscara, Bootbox, DataTables).
-- **Commits:** seguir a skill `mensagens-commit`.
+- **Commits:** Conventional Commits em português, detalhados na skill
+  `mensagens-commit`. Resumo:
+  - formato `<tipo>(<escopo>): <resumo no imperativo>`, até 72 caracteres,
+    minúsculo no início e sem ponto final;
+  - tipos `feat`, `fix`, `refactor`, `docs`, `test`, `style`, `perf`,
+    `build`, `chore`; escopos `website`, `ia`, `assistente`, `bot`,
+    `deploy`, `docs`, `agentes` (opcional em mudança transversal);
+  - um assunto por commit; migration junto do model; nenhum segredo no
+    diff nem na mensagem.
 
 ## 5. Arquitetura — onde cada coisa mora
 
@@ -151,7 +182,8 @@ Sem a venv ativada, use `.\.venv\Scripts\python.exe manage.py ...`.
 | `GEMINI_USAR_VERTEX`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | opcionais; Gemini via Vertex AI com a identidade do App Engine, sem API Key |
 
 Local: arquivo `.env` (carregado pelo `python-dotenv`). Produção:
-`env_variables` do `app.yaml`. Modelo: `.env.example`.
+`env_variables` do `app.yaml`. Modelos versionados, só com placeholders:
+`.env.example` e `app.yaml.example`.
 
 ## 7. Política de segredos
 
@@ -177,8 +209,9 @@ Local: arquivo `.env` (carregado pelo `python-dotenv`). Produção:
 ## 9. Deploy (resumo)
 
 Google App Engine Standard + Postgres no Neon. Passo a passo completo em
-`docs/deploy.md` e na skill `deploy-app-engine`. Em resumo: variáveis no
-`env_variables` do `app.yaml` (`DEBUG=False`), `collectstatic`, `migrate`
+`docs/deploy.md` e na skill `deploy-app-engine`. Em resumo: copiar
+`app.yaml.example` para `app.yaml` (fora do Git) e preencher o
+`env_variables` (`DEBUG=False`), `collectstatic`, `migrate`
 apontando para o Neon, `gcloud app deploy`, `configurar_webhook` do Telegram
 e smoke test. **Agentes não executam nada contra produção** — só deixam os
 comandos prontos.
