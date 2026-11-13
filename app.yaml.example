@@ -1,0 +1,57 @@
+# Modelo do app.yaml do Google App Engine Standard — Sítio de Lurdes (naes2026).
+#
+# Como usar:
+#   Copy-Item app.yaml.example app.yaml
+#   e troque cada <placeholder> pelo valor real SÓ no app.yaml.
+#
+# O app.yaml real está no .gitignore e NUNCA vai para o Git nem para a
+# entrega: ele contém SECRET_KEY, a URL do banco com senha e os tokens.
+# Este arquivo de exemplo é versionado e só pode ter placeholders.
+# Passo a passo completo: docs/deploy.md (e a skill deploy-app-engine).
+
+runtime: python311
+
+# gunicorn está no requirements.txt; o App Engine define a variável $PORT.
+entrypoint: gunicorn -b :$PORT naes2026.wsgi:application
+
+instance_class: F1
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 2
+
+handlers:
+  # Arquivos estáticos gerados por "python manage.py collectstatic --noinput"
+  # (STATIC_ROOT = static_gcloud/, STATIC_URL = /static/).
+  - url: /static
+    static_dir: static_gcloud/
+    secure: always
+
+  # Todo o resto vai para o Django, sempre em HTTPS
+  # (o redirecionamento e o HSTS ficam no settings com DEBUG=False).
+  - url: /.*
+    script: auto
+    secure: always
+
+env_variables:
+  # --- Django ---
+  SECRET_KEY: "<gere com: python -c \"import secrets; print(secrets.token_urlsafe(50))\">"
+  DEBUG: "False"
+  ALLOWED_HOSTS: "<projeto>.<região>.r.appspot.com"
+  CSRF_TRUSTED_ORIGINS: "https://<projeto>.<região>.r.appspot.com"
+  # SECURE_HSTS_SECONDS: "3600"
+
+  # --- Banco (PostgreSQL no Neon) ---
+  DATABASE_URL: "postgresql://<usuário>:<senha>@<host-do-neon>/<banco>?sslmode=require"
+
+  # --- IA (Google Gemini) ---
+  GEMINI_API_KEY: "<chave do Google AI Studio>"
+  # Alternativa sem API Key (identidade do App Engine via Vertex AI):
+  # GEMINI_USAR_VERTEX: "True"
+  # GOOGLE_CLOUD_PROJECT: "<id-do-projeto>"
+  # GOOGLE_CLOUD_LOCATION: "global"
+
+  # --- Bot do Telegram ---
+  TELEGRAM_BOT_TOKEN: "<token do @BotFather>"
+  TELEGRAM_WEBHOOK_SECRET: "<segredo aleatório: A-Z, a-z, 0-9, _ e ->"
+  TELEGRAM_BOT_USERNAME: "<nome do bot sem @>"

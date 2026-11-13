@@ -19,6 +19,12 @@ description: Use ao preparar, revisar ou documentar um deploy do Sítio de Lurde
 
 ### 2. `app.yaml` (fora do Git — só a pessoa responsável edita)
 
+O modelo versionado é `app.yaml.example` (runtime, `entrypoint` com
+gunicorn, `handlers` e `env_variables` com placeholders). Numa máquina nova:
+`Copy-Item app.yaml.example app.yaml` e preencher. Mudou a estrutura do
+`app.yaml`? Replique no `.example`, **sem valores**. Nunca leia nem imprima o
+`app.yaml` real.
+
 `env_variables` precisa ter (os valores ficam só no arquivo):
 
 `SECRET_KEY`, `DEBUG` (`False`), `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`,

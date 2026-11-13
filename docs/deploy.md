@@ -36,6 +36,18 @@ Passo a passo para publicar esta versão em
 
 ## 2. `app.yaml` → `env_variables`
 
+O `app.yaml` real fica fora do Git. A estrutura dele (runtime, `entrypoint`
+com gunicorn, `handlers` de `/static` e `env_variables`) está versionada em
+[`app.yaml.example`](../app.yaml.example), só com placeholders. Numa máquina
+nova:
+
+```powershell
+Copy-Item app.yaml.example app.yaml   # depois preencha os valores reais
+```
+
+Se mudar a estrutura do `app.yaml` real (novo handler, nova variável),
+replique a mudança no `app.yaml.example` — sem os valores.
+
 Acrescente/ajuste estas variáveis (os valores reais só no arquivo):
 
 ```yaml
