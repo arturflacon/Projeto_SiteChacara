@@ -69,7 +69,8 @@ Nenhum teste acessa a internet: a IA e a API do Telegram são sempre mockadas.
 ## Variáveis de ambiente
 
 Local: arquivo `.env` (modelo em `.env.example`). Produção: `env_variables`
-do `app.yaml`. **Nunca** coloque os valores no código ou no Git.
+do `app.yaml` (modelo em `app.yaml.example`). **Nunca** coloque os valores
+no código ou no Git.
 
 | Variável | Para quê |
 | --- | --- |
@@ -95,8 +96,10 @@ Opcionais: `SECURE_HSTS_SECONDS`, `GEMINI_USAR_VERTEX`,
 | `ia/` | porta única para a IA (`chamar_ia`), auditoria, cotas e telas de administração |
 | `assistente/` | assistente virtual (histórico, contexto do site, instruções, Markdown sanitizado) |
 | `telegram_bot/` | webhook, comandos, vínculo de conta e log do bot |
-| `static/` | `css/estilo.css` (paleta petróleo), `js/site.js` (plugins jQuery), `js/assistente.js` |
+| `static/` | `css/estilo.css` (paleta petróleo), `js/site.js` (plugins jQuery), `js/calendario.js` (FullCalendar), `js/assistente.js` |
 | `docs/` | [requisitos](docs/requisitos.md), [otimizações](docs/otimizacoes.md) e [deploy](docs/deploy.md) |
+| `app.yaml.example` | modelo do `app.yaml` do App Engine, só com placeholders (o real fica fora do Git) |
+| `scripts/` | `gerar_entrega.py`: gera `entrega/submissao.txt` com o código e o `git log --oneline` |
 
 Para quem vai mexer no código (pessoas ou agentes de IA): leia o
 [AGENTS.md](AGENTS.md) e as skills em `.claude/skills/`.
